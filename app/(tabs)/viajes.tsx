@@ -2,7 +2,23 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
 
+// Trip data — replace with real data when trips are stored in DB
+const TRIP_START = new Date('2026-08-14T00:00:00');
+const TRIP_END   = new Date('2026-08-21T00:00:00');
+
+function daysUntil(date: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 export default function ViajesScreen() {
+  const days = daysUntil(TRIP_START);
+  const countdownLabel = days > 0 ? `${days}` : days === 0 ? '¡Hoy!' : 'Terminado';
+  const showDays = days > 0;
+
   return (
     <SafeAreaView style={s.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: 110 }}>
@@ -16,8 +32,8 @@ export default function ViajesScreen() {
           <Text style={s.tripDest}>Próximas vacaciones</Text>
           <Text style={s.tripDates}>14 — 21 agosto 2026</Text>
           <Text style={s.tripCountdown}>
-            <Text style={s.tripBig}>74</Text>
-            <Text style={s.tripUnit}> días</Text>
+            <Text style={s.tripBig}>{countdownLabel}</Text>
+            {showDays && <Text style={s.tripUnit}> días</Text>}
           </Text>
         </View>
 

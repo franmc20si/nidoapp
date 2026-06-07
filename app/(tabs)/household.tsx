@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Alert,
+  View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, Image, ActivityIndicator, Platform, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,11 @@ export default function ProfileScreen() {
   const [nameVal, setNameVal] = useState(profile?.full_name ?? '');
   const [savingName, setSavingName] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => { setNameVal(profile?.full_name ?? ''); }, [profile]);
 
@@ -28,6 +33,7 @@ export default function ProfileScreen() {
   // ── save name ─────────────────────────────────────────────────────────────
   const saveName = async () => {
     if (!nameVal.trim() || !user) return;
+    setNameError('');
     setSavingName(true);
     const { data, error } = await supabase
       .from('profiles')
@@ -37,15 +43,16 @@ export default function ProfileScreen() {
       .single();
     setSavingName(false);
     if (!error && data) { setProfile(data); setEditingName(false); }
-    else Alert.alert('Error', error?.message ?? 'No se pudo guardar');
+    else setNameError(error?.message ?? 'No se pudo guardar');
   };
 
   // ── upload photo ──────────────────────────────────────────────────────────
   const pickPhoto = async () => {
+    setPhotoError('');
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería para cambiar la foto.');
+        setPhotoError('Necesitamos acceso a tu galería para cambiar la foto.');
         return;
       }
     }
@@ -85,7 +92,7 @@ export default function ProfileScreen() {
 
       if (!profError && profData) setProfile(profData);
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo subir la foto');
+      setPhotoError(e.message ?? 'No se pudo subir la foto');
     }
     setUploadingPhoto(false);
   };
@@ -96,7 +103,8 @@ export default function ProfileScreen() {
     if (!code) return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       await navigator.clipboard.writeText(code);
-      Alert.alert('Copiado', `El código ${code} está en tu portapapeles`);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2500);
     } else {
       shareCode();
     }
@@ -112,29 +120,23 @@ export default function ProfileScreen() {
   };
 
   // ── reset onboarding ──────────────────────────────────────────────────────
-  const resetOnboarding = () => {
-    Alert.alert(
-      'Resetear onboarding',
-      'Saldrás del nido actual y volverás al inicio. ¿Continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Resetear',
-          style: 'destructive',
-          onPress: () => {
-            useAuthStore.setState({ household: null });
-            router.replace('/(auth)/onboarding');
-          },
-        },
-      ],
-    );
+  const resetOnboarding = () => setConfirmReset(true);
+
+  const confirmResetAction = async () => {
+    setConfirmReset(false);
+    // Remove from household_members in DB so the user can join/create another
+    if (user && household) {
+      await supabase.from('household_members')
+        .delete()
+        .eq('household_id', household.id)
+        .eq('user_id', user.id);
+    }
+    useAuthStore.setState({ household: null });
+    router.replace('/(auth)/onboarding');
   };
 
   // ── sign out ──────────────────────────────────────────────────────────────
-  const handleSignOut = () => Alert.alert('Cerrar sesión', '¿Seguro?', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Salir', style: 'destructive', onPress: signOut },
-  ]);
+  const handleSignOut = () => setConfirmSignOut(true);
 
   return (
     <SafeAreaView style={s.root}>
@@ -168,27 +170,30 @@ export default function ProfileScreen() {
 
           {/* Name */}
           {editingName ? (
-            <View style={s.nameEditRow}>
-              <TextInput
-                style={s.nameInput}
-                value={nameVal}
-                onChangeText={setNameVal}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={saveName}
-              />
-              <TouchableOpacity
-                style={[s.nameBtn, { backgroundColor: accent.hex }, savingName && { opacity: 0.5 }]}
-                onPress={saveName}
-                disabled={savingName}
-              >
-                {savingName
-                  ? <ActivityIndicator color={C.white} size="small" />
-                  : <Text style={s.nameBtnText}>✓</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity style={s.nameCancelBtn} onPress={() => setEditingName(false)}>
-                <Text style={s.nameCancelText}>✕</Text>
-              </TouchableOpacity>
+            <View style={{ alignItems: 'center', width: '100%' }}>
+              <View style={s.nameEditRow}>
+                <TextInput
+                  style={s.nameInput}
+                  value={nameVal}
+                  onChangeText={setNameVal}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={saveName}
+                />
+                <TouchableOpacity
+                  style={[s.nameBtn, { backgroundColor: accent.hex }, savingName && { opacity: 0.5 }]}
+                  onPress={saveName}
+                  disabled={savingName}
+                >
+                  {savingName
+                    ? <ActivityIndicator color={C.white} size="small" />
+                    : <Text style={s.nameBtnText}>✓</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={s.nameCancelBtn} onPress={() => { setEditingName(false); setNameError(''); }}>
+                  <Text style={s.nameCancelText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              {!!nameError && <Text style={s.inlineError}>{nameError}</Text>}
             </View>
           ) : (
             <TouchableOpacity style={s.nameRow} onPress={() => setEditingName(true)} activeOpacity={0.7}>
@@ -196,6 +201,7 @@ export default function ProfileScreen() {
               <Text style={s.editPencil}>✏︎</Text>
             </TouchableOpacity>
           )}
+          {!!photoError && <Text style={[s.inlineError, { marginTop: 6 }]}>{photoError}</Text>}
         </View>
 
         {/* Stats */}
@@ -228,11 +234,13 @@ export default function ProfileScreen() {
                 </View>
                 <View style={s.codeActions}>
                   <TouchableOpacity
-                    style={[s.codeBtn, { backgroundColor: accent.hex + '15', borderColor: accent.hex + '40' }]}
+                    style={[s.codeBtn, { backgroundColor: codeCopied ? accent.hex : accent.hex + '15', borderColor: accent.hex + '40' }]}
                     onPress={copyCode}
                     activeOpacity={0.7}
                   >
-                    <Text style={[s.codeBtnText, { color: accent.hex }]}>📋 Copiar</Text>
+                    <Text style={[s.codeBtnText, { color: codeCopied ? C.white : accent.hex }]}>
+                      {codeCopied ? '✓ Copiado' : '📋 Copiar'}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.codeBtn, { backgroundColor: accent.hex + '15', borderColor: accent.hex + '40' }]}
@@ -266,6 +274,38 @@ export default function ProfileScreen() {
         <TouchableOpacity style={s.signOut} onPress={handleSignOut} activeOpacity={0.8}>
           <Text style={s.signOutText}>Cerrar sesión</Text>
         </TouchableOpacity>
+
+        {/* Inline confirm: reset onboarding */}
+        {confirmReset && (
+          <View style={s.confirmBox}>
+            <Text style={s.confirmTitle}>¿Salir del nido?</Text>
+            <Text style={s.confirmSub}>Saldrás del nido actual y volverás al inicio.</Text>
+            <View style={s.confirmRow}>
+              <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmReset(false)}>
+                <Text style={s.confirmCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.confirmDanger} onPress={confirmResetAction}>
+                <Text style={s.confirmDangerText}>Salir del nido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Inline confirm: sign out */}
+        {confirmSignOut && (
+          <View style={s.confirmBox}>
+            <Text style={s.confirmTitle}>Cerrar sesión</Text>
+            <Text style={s.confirmSub}>¿Seguro que quieres salir?</Text>
+            <View style={s.confirmRow}>
+              <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmSignOut(false)}>
+                <Text style={s.confirmCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.confirmDanger} onPress={signOut}>
+                <Text style={s.confirmDangerText}>Cerrar sesión</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -320,4 +360,15 @@ const s = StyleSheet.create({
 
   signOut: { marginHorizontal: 20, backgroundColor: '#FEE8E1', borderRadius: R.l, padding: 16, alignItems: 'center' },
   signOutText: { color: '#C2502F', fontWeight: '600', fontFamily: FONT, fontSize: 15 },
+
+  inlineError: { fontSize: 13, color: '#C2502F', fontFamily: FONT, marginTop: 4, textAlign: 'center' },
+
+  confirmBox: { marginHorizontal: 20, marginTop: 12, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1.5, borderColor: '#C2502F' + '40', padding: 18 },
+  confirmTitle: { fontSize: 16, fontWeight: '600', color: C.ink, fontFamily: FONT },
+  confirmSub: { fontSize: 13, color: C.ink2, fontFamily: FONT, marginTop: 4, marginBottom: 14 },
+  confirmRow: { flexDirection: 'row', gap: 10 },
+  confirmCancel: { flex: 1, borderRadius: R.l, borderWidth: 1, borderColor: C.line, padding: 11, alignItems: 'center' },
+  confirmCancelText: { fontSize: 14, fontWeight: '500', color: C.ink2, fontFamily: FONT },
+  confirmDanger: { flex: 1, borderRadius: R.l, backgroundColor: '#C2502F', padding: 11, alignItems: 'center' },
+  confirmDangerText: { fontSize: 14, fontWeight: '600', color: C.white, fontFamily: FONT },
 });

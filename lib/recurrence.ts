@@ -9,9 +9,10 @@ export const RECURRENCE_OPTS: { key: RecurrenceRule; label: string; short: strin
 ];
 
 /** Next ISO date (YYYY-MM-DD) after completing a recurring task. */
-export function nextDueDate(rule: RecurrenceRule | string, from: Date = new Date()): string {
-  const d = new Date(from);
-  d.setHours(0, 0, 0, 0);
+export function nextDueDate(rule: RecurrenceRule | string, from: Date | string = new Date()): string {
+  // Use T12:00:00 to avoid timezone-related date shifts when from is a date string
+  const d = typeof from === 'string' ? new Date(from + 'T12:00:00') : new Date(from);
+  d.setHours(12, 0, 0, 0);
   switch (rule) {
     case 'daily':     d.setDate(d.getDate() + 1);   break;
     case 'weekly':    d.setDate(d.getDate() + 7);   break;
@@ -22,10 +23,10 @@ export function nextDueDate(rule: RecurrenceRule | string, from: Date = new Date
   return d.toISOString().split('T')[0];
 }
 
-/** Human label for display in task cards. */
+/** Human label for display in task cards. Empty string for non-recurring tasks. */
 export function recurrenceLabel(rule: string | null | undefined): string {
-  if (!rule) return 'Regular';
-  return RECURRENCE_OPTS.find(o => o.key === rule)?.label ?? 'Regular';
+  if (!rule) return '';
+  return RECURRENCE_OPTS.find(o => o.key === rule)?.label ?? '';
 }
 
 /** True when a done recurring task should reappear (its next due date is today or past). */

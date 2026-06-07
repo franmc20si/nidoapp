@@ -27,7 +27,7 @@ export default function NidoScreen() {
 
     // Reset recurring tasks whose next due date has arrived
     const toReset = tasks.filter(t =>
-      t.is_done && t.is_recurring && isDueAgain((t as any).due_date)
+      t.is_done && t.is_recurring && isDueAgain(t.due_date)
     );
     if (toReset.length > 0) {
       const ids = toReset.map(t => t.id);
@@ -41,9 +41,8 @@ export default function NidoScreen() {
   useEffect(() => { fetchTasks(); }, [household]);
 
   const toggleTask = async (task: Task) => {
-    const anyTask = task as any;
-    if (!task.is_done && task.is_recurring && anyTask.recurrence_rule) {
-      const due = nextDueDate(anyTask.recurrence_rule);
+    if (!task.is_done && task.is_recurring && task.recurrence_rule) {
+      const due = nextDueDate(task.recurrence_rule);
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true } : t));
       await supabase.from('tasks').update({ is_done: true, due_date: due }).eq('id', task.id);
     } else {
@@ -52,13 +51,13 @@ export default function NidoScreen() {
     }
   };
 
-  const shown = selected ? tasks.filter((t) => (t as any).category === selected) : tasks;
+  const shown = selected ? tasks.filter((t) => t.category === selected) : tasks;
 
   const total = tasks.length;
   const doneCount = tasks.filter((t) => t.is_done).length;
   const ptsWeek = tasks
     .filter((t) => t.is_done)
-    .reduce((sum, t) => sum + (((t as any).points as number) ?? 10), 0);
+    .reduce((sum, t) => sum + (t.points ?? 10), 0);
 
   return (
     <SafeAreaView style={s.root}>

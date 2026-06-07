@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
-  StyleSheet, TextInput, Animated,
+  StyleSheet, TextInput, Animated, useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
@@ -88,6 +88,7 @@ interface Props {
 }
 
 export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel, recipeItems, accent }: Props) {
+  const { height: screenHeight } = useWindowDimensions();
   const [checked,     setChecked]     = useState<Set<string>>(new Set());
   const [manualItems, setManualItems] = useState<ManualItem[]>([]);
   const [addCat,      setAddCat]      = useState('otros');
@@ -136,12 +137,12 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
 
   // Build merged item list
   const allItems: ShoppingItem[] = [
-    ...recipeItems.map((r, i) => ({
-      id: `ri-${i}-${r.name}`,
+    ...recipeItems.map((r) => ({
+      id: `ri-${r.recipeName}-${r.name}`,
       name: r.name,
       amount: r.amount,
       category: r.category,
-      checked: checked.has(`ri-${i}-${r.name}`),
+      checked: checked.has(`ri-${r.recipeName}-${r.name}`),
       source: 'recipe' as const,
       recipeColor: r.recipeColor,
       recipeName: r.recipeName,
@@ -190,7 +191,7 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
           <View style={[sl.progressFill, { width: `${total ? (doneQty/total)*100 : 0}%` as any, backgroundColor: accent.hex }]} />
         </View>
 
-        <ScrollView style={sl.scroll} contentContainerStyle={sl.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView style={[sl.scroll, { maxHeight: screenHeight * 0.65 }]} contentContainerStyle={sl.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {allItems.length === 0 && (
             <View style={sl.empty}>
@@ -327,7 +328,7 @@ const sl = StyleSheet.create({
   closeBtn:    { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   closeBtnText:{ fontSize: 13, color: C.ink2 },
 
-  scroll:       { maxHeight: 520 },
+  scroll:       { maxHeight: undefined },
   progressBar:  { height: 4, backgroundColor: C.line, marginHorizontal: 22, borderRadius: 999, overflow: 'hidden', marginBottom: 4 },
   progressFill: { height: '100%', borderRadius: 999 },
 

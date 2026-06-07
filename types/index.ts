@@ -32,6 +32,9 @@ export interface Task {
   is_done: boolean;
   is_recurring: boolean;
   recurrence_rule: string | null;
+  category: string | null;
+  points: number | null;
+  duration_min: number | null;
   created_by: string;
   created_at: string;
 }

@@ -15,13 +15,12 @@ interface Props {
 }
 
 export default function TaskCard({ task, onToggle, onAnimatedOut }: Props) {
-  const anyTask = task as any;
-  const cat = catFor(anyTask.category);
-  const pts: number = anyTask.points ?? 10;
-  const min: number = anyTask.duration_min ?? pts * 5;
+  const cat = catFor(task.category);
+  const pts: number = task.points ?? 10;
+  const min: number = task.duration_min ?? pts * 5;
   const recurring = task.is_recurring;
   const recLabel = recurring ? recurrenceLabel(task.recurrence_rule) : null;
-  const CatIcon = getCatIcon(anyTask.category);
+  const CatIcon = getCatIcon(task.category);
   const th = taskTheme(cat.color, pts);
 
   const translateX = useRef(new Animated.Value(0)).current;
