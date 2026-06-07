@@ -37,9 +37,17 @@ async function resolveDestination(userId: string) {
 export default function AuthCallback() {
   const { setSession, setProfile } = useAuthStore();
   const [status, setStatus] = useState('Conectando...');
+  const [debug, setDebug] = useState('');
 
   useEffect(() => {
     let handled = false;
+
+    // Capture URL info for debugging
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.substring(0, 80);
+      const search = window.location.search.substring(0, 80);
+      setDebug(`hash: ${hash || '(vacío)'} | search: ${search || '(vacío)'}`);
+    }
 
     const processSession = async (session: any) => {
       if (handled) return;
@@ -54,6 +62,7 @@ export default function AuthCallback() {
     // Subscribe first to catch SIGNED_IN if it fires before getSession resolves
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        setStatus(`evento: ${event}`);
         if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
           processSession(session);
         }
@@ -65,14 +74,15 @@ export default function AuthCallback() {
       if (session && !handled) {
         processSession(session);
       } else if (!session) {
-        setStatus('Verificando con Google...');
+        setStatus('Sin sesión — esperando evento...');
       }
     });
 
     // Fallback: give up after 15 seconds
     const timeout = setTimeout(() => {
       if (!handled) {
-        router.replace('/(auth)/login');
+        setStatus('Timeout — volviendo al inicio');
+        setTimeout(() => router.replace('/(auth)/login'), 2000);
       }
     }, 15000);
 
@@ -86,6 +96,7 @@ export default function AuthCallback() {
     <View style={s.root}>
       <ActivityIndicator size="large" color="#4A90D9" />
       <Text style={s.text}>{status}</Text>
+      <Text style={s.debug}>{debug}</Text>
     </View>
   );
 }
@@ -93,4 +104,5 @@ export default function AuthCallback() {
 const s = StyleSheet.create({
   root: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   text: { marginTop: 16, color: '#888', fontSize: 15 },
+  debug: { marginTop: 12, color: '#aaa', fontSize: 11, paddingHorizontal: 16, textAlign: 'center' },
 });
