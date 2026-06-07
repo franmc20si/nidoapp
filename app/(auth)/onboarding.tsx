@@ -28,19 +28,31 @@ export default function OnboardingScreen() {
   const createHousehold = async () => {
     if (!householdName.trim()) { Alert.alert('Falta el nombre', 'Escribe un nombre para tu nido'); return; }
     setLoading(true);
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { data, error } = await supabase
-      .from('households')
-      .insert({ name: householdName.trim(), invite_code: code, created_by: user?.id })
-      .select().single();
-    if (error || !data) { setLoading(false); Alert.alert('Error', error?.message ?? 'No se pudo crear'); return; }
-    await supabase.from('household_members').insert({ household_id: data.id, user_id: user?.id, role: 'admin' });
-    setLoading(false);
-    setCreatedCode(code);
-    setHousehold(data);
-    // Show code before entering
-    setStep('join'); // reuse "join" view as the "share code" step — handled below via createdCode
-    router.replace('/(tabs)');
+    try {
+      // Always get user directly from Supabase to avoid store timing issues
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) { Alert.alert('Error', 'Sesión no encontrada. Vuelve a entrar.'); setLoading(false); return; }
+
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const { data, error } = await supabase
+        .from('households')
+        .insert({ name: householdName.trim(), invite_code: code, created_by: currentUser.id })
+        .select().single();
+      if (error || !data) { Alert.alert('Error al crear', error?.message ?? 'No se pudo crear'); setLoading(false); return; }
+
+      const { error: memberError } = await supabase
+        .from('household_members')
+        .insert({ household_id: data.id, user_id: currentUser.id, role: 'admin' });
+      if (memberError) { Alert.alert('Error', memberError.message); setLoading(false); return; }
+
+      setCreatedCode(code);
+      setHousehold(data);
+      setLoading(false);
+      router.replace('/(tabs)');
+    } catch (e: any) {
+      Alert.alert('Error inesperado', e?.message ?? String(e));
+      setLoading(false);
+    }
   };
 
   // ── Join household ────────────────────────────────────────────────────────
@@ -48,17 +60,22 @@ export default function OnboardingScreen() {
     const code = inviteCode.trim().toUpperCase();
     if (code.length < 4) { Alert.alert('Código inválido', 'Introduce el código de invitación completo'); return; }
     setLoading(true);
-    const { data, error } = await supabase
-      .from('households').select().eq('invite_code', code).single();
-    if (error || !data) {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) { Alert.alert('Error', 'Sesión no encontrada. Vuelve a entrar.'); setLoading(false); return; }
+
+      const { data, error } = await supabase
+        .from('households').select().eq('invite_code', code).single();
+      if (error || !data) { Alert.alert('Código no encontrado', 'Comprueba el código e inténtalo de nuevo'); setLoading(false); return; }
+
+      await supabase.from('household_members').insert({ household_id: data.id, user_id: currentUser.id, role: 'member' });
+      setHousehold(data);
       setLoading(false);
-      Alert.alert('Código no encontrado', 'Comprueba el código e inténtalo de nuevo');
-      return;
+      router.replace('/(tabs)');
+    } catch (e: any) {
+      Alert.alert('Error inesperado', e?.message ?? String(e));
+      setLoading(false);
     }
-    await supabase.from('household_members').insert({ household_id: data.id, user_id: user?.id, role: 'member' });
-    setLoading(false);
-    setHousehold(data);
-    router.replace('/(tabs)');
   };
 
   // ── Welcome step ──────────────────────────────────────────────────────────
