@@ -1,5 +1,10 @@
 {
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/icon-192.png",  "destination": "/icon-192.png" },
+    { "source": "/icon-512.png",  "destination": "/icon-512.png" },
+    { "source": "/(.*)",          "destination": "/index.html" }
+  ]
 }
