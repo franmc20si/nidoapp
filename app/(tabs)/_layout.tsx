@@ -62,10 +62,13 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
     onClose();
   };
 
+  const [saveError, setSaveError] = useState('');
+
   const handleAdd = async () => {
     if (!title.trim() || !household) return;
     setSaving(true);
-    await supabase.from('tasks').insert({
+    setSaveError('');
+    const { error } = await supabase.from('tasks').insert({
       household_id: household.id,
       title: title.trim(),
       created_by: user?.id,
@@ -76,6 +79,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
       duration_min: min,
     } as any);
     setSaving(false);
+    if (error) { setSaveError(error.message); return; }
     reset();
     onClose();
   };
@@ -192,6 +196,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
             </View>
 
             {/* Save */}
+            {saveError ? <Text style={tb.errorText}>{saveError}</Text> : null}
             <TouchableOpacity style={[tb.save, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={handleAdd} disabled={saving} activeOpacity={0.85}>
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={tb.saveText}>Añadir al nido</Text>}
             </TouchableOpacity>
@@ -329,4 +334,5 @@ const tb = StyleSheet.create({
 
   save: { backgroundColor: C.brand, borderRadius: R.pill, paddingVertical: 17, alignItems: 'center', shadowColor: C.brand, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
+  errorText: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
 });
