@@ -1,14 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
+import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import { AchFlame, AchNest, AchStar, AchTrophy, AchGem } from '@/components/icons';
 
-const MEMBERS = [
-  { name: 'Tú',   ini: 'T', color: C.brand, pts: 124, tasks: 8 },
-  { name: 'Marc', ini: 'M', color: C.suelo, pts: 76,  tasks: 5 },
-];
+const MEMBER_COLORS = [C.brand, C.suelo, '#7FA86A', '#A881F2', '#D97B66'];
 
 const ACHIEVEMENTS = [
   { Icon: AchFlame,  title: 'Racha de 5', desc: '5 días seguidos', unlocked: true },
@@ -18,11 +17,51 @@ const ACHIEVEMENTS = [
   { Icon: AchGem,    title: 'Leyenda',    desc: '500 puntos',      unlocked: false },
 ];
 
+interface Member { id: string; name: string; ini: string; color: string; pts: number; tasks: number; }
+
 export default function RepartoScreen() {
   const [period, setPeriod] = useState<'semana' | 'mes' | 'ano'>('semana');
   const { accent } = useNidoStore();
+  const { household, user } = useAuthStore();
+  const [members, setMembers] = useState<Member[]>([]);
 
-  const totalPts = MEMBERS.reduce((s, m) => s + m.pts, 0);
+  useEffect(() => {
+    if (!household) return;
+    (async () => {
+      // Fetch members of this household with their profiles
+      const { data: memberRows } = await supabase
+        .from('household_members')
+        .select('user_id, profiles(full_name)')
+        .eq('household_id', household.id);
+
+      // Fetch done tasks to count points and tasks per user
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('created_by, points, is_done')
+        .eq('household_id', household.id)
+        .eq('is_done', true);
+
+      const built: Member[] = (memberRows ?? []).map((row: any, i: number) => {
+        const name = row.profiles?.full_name ?? 'Miembro';
+        const isMe = row.user_id === user?.id;
+        const userTasks = (tasks ?? []).filter((t: any) => t.created_by === row.user_id);
+        return {
+          id: row.user_id,
+          name: isMe ? 'Tú' : name.split(' ')[0],
+          ini: (isMe ? 'T' : name[0] ?? '?').toUpperCase(),
+          color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+          pts: userTasks.reduce((s: number, t: any) => s + (t.points ?? 10), 0),
+          tasks: userTasks.length,
+        };
+      });
+      // Put current user first
+      built.sort((a) => (a.id === user?.id ? -1 : 1));
+      setMembers(built);
+    })();
+  }, [household]);
+
+  const MEMBERS = members;
+  const totalPts = MEMBERS.reduce((s, m) => s + m.pts, 0) || 1;
 
   return (
     <SafeAreaView style={s.root}>
