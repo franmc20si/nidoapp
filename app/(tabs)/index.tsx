@@ -87,11 +87,26 @@ export default function HoyScreen() {
     setRemoved((prev) => new Set(prev).add(task.id));
   };
 
+  const todayStr    = new Date().toDateString();
+  const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+
   const visible = tasks.filter((t) => !removed.has(t.id));
   const pending = visible.filter((t) => !t.is_done);
-  const done = visible.filter((t) => t.is_done);
-  const shown = tab === 'todo' ? visible : pending;
-  const total = visible.length;
+  const done    = visible.filter((t) => t.is_done);
+
+  const hoyTasks    = pending.filter((t) => {
+    const due = (t as any).due_date;
+    if (!due) return true;                        // no date → show today
+    return new Date(due).toDateString() === todayStr || new Date(due) < new Date();
+  });
+  const manTasks    = pending.filter((t) => {
+    const due = (t as any).due_date;
+    if (!due) return false;
+    return new Date(due).toDateString() === tomorrowStr;
+  });
+
+  const shown = tab === 'todo' ? visible : tab === 'manana' ? manTasks : hoyTasks;
+  const total    = visible.length;
   const doneCount = done.length;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
@@ -104,8 +119,8 @@ export default function HoyScreen() {
           <View style={{ flex: 1 }}>
             <Text style={n.greetName}>Buenos días, {firstName}</Text>
             <Text style={n.greetSub}>
-              {pending.length > 0
-                ? `Hoy el nido necesita ${pending.length} ${pending.length === 1 ? 'cosa' : 'cosas'}`
+              {hoyTasks.length > 0
+                ? `Hoy el nido necesita ${hoyTasks.length} ${hoyTasks.length === 1 ? 'cosa' : 'cosas'}`
                 : '¡Nido completado!'}
             </Text>
           </View>
