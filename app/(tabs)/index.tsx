@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
@@ -11,6 +12,13 @@ import TaskCard from '@/components/TaskCard';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+
+function getGreeting(name: string) {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 14) return `Buenos días, ${name}`;
+  if (h >= 14 && h < 21) return `Buenas tardes, ${name}`;
+  return `Buenas noches, ${name}`;
+}
 
 const DAYS_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -44,6 +52,20 @@ export default function HoyScreen() {
 
   // Load saved accent when household is known
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
+
+  // Set browser theme-color meta tag on web
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+      }
+      meta.content = accent.hex;
+    }
+  }, [accent.hex]);
+
   const today = new Date();
   const days = getWeekDays();
   const firstName = profile?.full_name?.split(' ')[0] ?? 'tú';
@@ -111,13 +133,15 @@ export default function HoyScreen() {
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
   return (
-    <SafeAreaView style={n.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+    <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
+      <StatusBar style="light" backgroundColor={accent.hex} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}
+        style={{ backgroundColor: C.paper, borderTopLeftRadius: 0 }}>
 
         {/* Top bar */}
         <View style={n.topbar}>
           <View style={{ flex: 1 }}>
-            <Text style={n.greetName}>Buenos días, {firstName}</Text>
+            <Text style={n.greetName}>{getGreeting(firstName)}</Text>
             <Text style={n.greetSub}>
               {hoyTasks.length > 0
                 ? `Hoy el nido necesita ${hoyTasks.length} ${hoyTasks.length === 1 ? 'cosa' : 'cosas'}`
