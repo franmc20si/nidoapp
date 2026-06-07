@@ -59,10 +59,12 @@ export default function RootLayout() {
           SplashScreen.hideAsync();
           router.replace(route);
         } else if (!session) {
-          // If OAuth tokens are in the URL hash, wait for SIGNED_IN — don't
-          // navigate away or we'll strip the hash before Supabase can read it.
-          const hash = typeof window !== 'undefined' ? window.location.hash : '';
-          if (hash.includes('access_token')) return;
+          // Don't navigate if the callback page is handling OAuth tokens
+          if (typeof window !== 'undefined') {
+            const hash = window.location.hash;
+            const path = window.location.pathname;
+            if (hash.includes('access_token') || path === '/auth-callback') return;
+          }
           await fontPromise;
           SplashScreen.hideAsync();
           router.replace('/(auth)/login');

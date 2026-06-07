@@ -14,7 +14,7 @@ export default function LoginScreen() {
 
   const handleGoogle = async () => {
     const redirectTo = typeof window !== 'undefined'
-      ? window.location.origin
+      ? `${window.location.origin}/auth-callback`
       : 'nido://auth/callback';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
