@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -17,6 +17,7 @@ export default function NidoScreen() {
   const { accent } = useNidoStore();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchTasks = async () => {
     if (!household) return;
@@ -61,7 +62,18 @@ export default function NidoScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => { setRefreshing(true); await fetchTasks(); setRefreshing(false); }}
+              tintColor={accent.hex}
+              colors={[accent.hex]}
+            />
+          }
+        >
 
         {/* Top bar */}
         <View style={s.topbar}>

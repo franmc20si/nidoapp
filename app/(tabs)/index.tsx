@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
@@ -49,6 +49,7 @@ export default function HoyScreen() {
   const [tab, setTab] = useState<'hoy' | 'manana' | 'todo'>('hoy');
   const [bellActive, setBellActive] = useState(false);
   const [nidoSheetVisible, setNidoSheetVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Load saved accent when household is known
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
@@ -136,8 +137,19 @@ export default function HoyScreen() {
   return (
     <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
       <StatusBar style="light" backgroundColor={accent.hex} />
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}
-        style={{ backgroundColor: C.paper, borderTopLeftRadius: 0 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        style={{ backgroundColor: C.paper }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => { setRefreshing(true); await fetchTasks(); setRefreshing(false); }}
+            tintColor={accent.hex}
+            colors={[accent.hex]}
+          />
+        }
+      >
 
         {/* Top bar */}
         <View style={n.topbar}>

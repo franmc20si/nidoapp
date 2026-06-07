@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
@@ -24,8 +24,9 @@ export default function RepartoScreen() {
   const { accent } = useNidoStore();
   const { household, user } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const loadMembers = async () => {
     if (!household) return;
     (async () => {
       // Fetch members of this household with their profiles
@@ -58,14 +59,27 @@ export default function RepartoScreen() {
       built.sort((a) => (a.id === user?.id ? -1 : 1));
       setMembers(built);
     })();
-  }, [household]);
+  };
+
+  useEffect(() => { loadMembers(); }, [household]);
 
   const MEMBERS = members;
   const totalPts = MEMBERS.reduce((s, m) => s + m.pts, 0) || 1;
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => { setRefreshing(true); await loadMembers(); setRefreshing(false); }}
+              tintColor={accent.hex}
+              colors={[accent.hex]}
+            />
+          }
+        >
 
         {/* Top bar */}
         <View style={s.topbar}>
