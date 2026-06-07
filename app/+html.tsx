@@ -20,7 +20,7 @@ export default function Root({ children }: PropsWithChildren) {
         {/* Icons */}
         <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
         <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
         <ScrollViewStyleReset />
       </head>
