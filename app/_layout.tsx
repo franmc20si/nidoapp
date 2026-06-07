@@ -57,7 +57,7 @@ export default function RootLayout() {
             if (household) setHousehold(household);
             SplashScreen.hideAsync();
             router.replace(route);
-          } else if (!session && event !== 'INITIAL_SESSION') {
+          } else if (!session) {
             SplashScreen.hideAsync();
             router.replace('/(auth)/login');
           }
