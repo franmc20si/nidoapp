@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "mcp__Claude_in_Chrome__computer",
+      "Bash(curl -s http://localhost:8083)",
+      "Bash(npx expo *)",
+      "Bash(curl -s \"http://localhost:8083/node_modules/expo-router/entry.bundle?platform=web\")"
+    ]
+  }
+}

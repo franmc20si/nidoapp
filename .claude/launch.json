@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Expo (universal)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--port", "8083"],
+      "port": 8083
+    },
+    {
+      "name": "Expo Web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8083", "--clear"],
+      "port": 8083
+    },
+    {
+      "name": "Expo Android",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--android", "--port", "8084"],
+      "port": 8084
+    },
+    {
+      "name": "Expo iOS",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--ios", "--port", "8085"],
+      "port": 8085
+    }
+  ]
+}
