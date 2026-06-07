@@ -44,29 +44,29 @@ export default function RootLayout() {
   const { setSession, setProfile, setHousehold, session, isLoading } = useAuthStore();
 
   useEffect(() => {
-    let cleanup = () => {};
+    // Start font loading in background — don't block auth listener
+    const fontPromise = Font.loadAsync({ Nohemi: require('../assets/Nohemi-Regular.ttf') });
 
-    Font.loadAsync({ Nohemi: require('../assets/Nohemi-Regular.ttf') }).then(() => {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          setSession(session);
-          if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-            const profile = await ensureProfile(session.user);
-            if (profile) setProfile(profile);
-            const { route, household } = await resolveDestination(session.user.id);
-            if (household) setHousehold(household);
-            SplashScreen.hideAsync();
-            router.replace(route);
-          } else if (!session) {
-            SplashScreen.hideAsync();
-            router.replace('/(auth)/login');
-          }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          const profile = await ensureProfile(session.user);
+          if (profile) setProfile(profile);
+          const { route, household } = await resolveDestination(session.user.id);
+          if (household) setHousehold(household);
+          await fontPromise;
+          SplashScreen.hideAsync();
+          router.replace(route);
+        } else if (!session) {
+          await fontPromise;
+          SplashScreen.hideAsync();
+          router.replace('/(auth)/login');
         }
-      );
-      cleanup = () => subscription.unsubscribe();
-    });
+      }
+    );
 
-    return () => cleanup();
+    return () => subscription.unsubscribe();
   }, []);
 
   return (
