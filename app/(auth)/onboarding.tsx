@@ -29,7 +29,7 @@ export default function OnboardingScreen() {
   const showError = (msg: string) => { setErrorMsg(msg); setLoading(false); };
 
   const createHousehold = async () => {
-    setErrorMsg('');
+    setErrorMsg(`pulsado · nombre="${householdName}"`);
     if (!householdName.trim()) { showError('Escribe un nombre para tu nido'); return; }
     setLoading(true);
     try {
@@ -181,7 +181,7 @@ export default function OnboardingScreen() {
           >
             {loading
               ? <ActivityIndicator color={C.white} />
-              : <Text style={s.btnPrimaryText}>Crear nido ›</Text>}
+              : <Text style={s.btnPrimaryText}>Crear nido "{householdName}" ›</Text>}
           </TouchableOpacity>
 
         </ScrollView>
