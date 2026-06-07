@@ -21,60 +21,62 @@ export default function OnboardingScreen() {
   const [inviteCode, setInviteCode]      = useState('');
   const [loading, setLoading]            = useState(false);
   const [createdCode, setCreatedCode]    = useState('');
+  const [errorMsg, setErrorMsg]          = useState('');
 
   const accent = NIDO_COLORS.find(c => c.key === colorKey) ?? NIDO_COLORS[0];
 
   // ── Create household ──────────────────────────────────────────────────────
+  const showError = (msg: string) => { setErrorMsg(msg); setLoading(false); };
+
   const createHousehold = async () => {
-    if (!householdName.trim()) { Alert.alert('Falta el nombre', 'Escribe un nombre para tu nido'); return; }
+    setErrorMsg('');
+    if (!householdName.trim()) { showError('Escribe un nombre para tu nido'); return; }
     setLoading(true);
     try {
-      // Always get user directly from Supabase to avoid store timing issues
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { Alert.alert('Error', 'Sesión no encontrada. Vuelve a entrar.'); setLoading(false); return; }
+      if (!currentUser) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
 
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const { data, error } = await supabase
         .from('households')
         .insert({ name: householdName.trim(), invite_code: code, created_by: currentUser.id })
         .select().single();
-      if (error || !data) { Alert.alert('Error al crear', error?.message ?? 'No se pudo crear'); setLoading(false); return; }
+      if (error || !data) { showError(error?.message ?? 'No se pudo crear el nido'); return; }
 
       const { error: memberError } = await supabase
         .from('household_members')
         .insert({ household_id: data.id, user_id: currentUser.id, role: 'admin' });
-      if (memberError) { Alert.alert('Error', memberError.message); setLoading(false); return; }
+      if (memberError) { showError(memberError.message); return; }
 
       setCreatedCode(code);
       setHousehold(data);
       setLoading(false);
       router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('Error inesperado', e?.message ?? String(e));
-      setLoading(false);
+      showError(e?.message ?? String(e));
     }
   };
 
   // ── Join household ────────────────────────────────────────────────────────
   const joinHousehold = async () => {
+    setErrorMsg('');
     const code = inviteCode.trim().toUpperCase();
-    if (code.length < 4) { Alert.alert('Código inválido', 'Introduce el código de invitación completo'); return; }
+    if (code.length < 4) { showError('Introduce el código de invitación completo'); return; }
     setLoading(true);
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { Alert.alert('Error', 'Sesión no encontrada. Vuelve a entrar.'); setLoading(false); return; }
+      if (!currentUser) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
 
       const { data, error } = await supabase
         .from('households').select().eq('invite_code', code).single();
-      if (error || !data) { Alert.alert('Código no encontrado', 'Comprueba el código e inténtalo de nuevo'); setLoading(false); return; }
+      if (error || !data) { showError('Código no encontrado. Comprueba e inténtalo de nuevo'); return; }
 
       await supabase.from('household_members').insert({ household_id: data.id, user_id: currentUser.id, role: 'member' });
       setHousehold(data);
       setLoading(false);
       router.replace('/(tabs)');
     } catch (e: any) {
-      Alert.alert('Error inesperado', e?.message ?? String(e));
-      setLoading(false);
+      showError(e?.message ?? String(e));
     }
   };
 
@@ -170,10 +172,12 @@ export default function OnboardingScreen() {
             </View>
           )}
 
+          {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
+
           <TouchableOpacity
-            style={[s.btnPrimary, { backgroundColor: accent.hex }, (!householdName.trim() || loading) && { opacity: 0.4 }]}
+            style={[s.btnPrimary, { backgroundColor: accent.hex }, loading && { opacity: 0.6 }]}
             onPress={createHousehold}
-            disabled={!householdName.trim() || loading}
+            disabled={loading}
           >
             {loading
               ? <ActivityIndicator color={C.white} />
@@ -290,4 +294,5 @@ const s = StyleSheet.create({
 
   btnPrimary:     { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },
   btnPrimaryText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
+  errorText:      { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
 });
