@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
@@ -91,6 +92,7 @@ export default function HoyScreen() {
   };
 
   useEffect(() => { fetchTasks(); }, [household]);
+  useFocusEffect(useCallback(() => { fetchTasks(); }, [household]));
 
   const toggleTask = async (task: Task) => {
     const anyTask = task as any;
