@@ -57,7 +57,6 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, completerName 
             <Text style={[s.title, { color: th.fg }, task.is_done && s.titleDone]} numberOfLines={2}>
               {task.title}
             </Text>
-            <Text style={[s.dur, { color: th.sub }]}>{fmtDur(min)}</Text>
           </View>
           <View style={s.meta}>
             {recLabel && (
@@ -68,8 +67,11 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, completerName 
             )}
             <Text style={[s.pts, { color: th.mark }]}>+{pts} pts</Text>
           </View>
+        </View>
+        <View style={s.rightCol}>
+          <Text style={[s.dur, { color: th.sub }]}>{fmtDur(min)}</Text>
           {task.is_done && completerName ? (
-            <Text style={[s.completer, { color: th.sub }]}>✓ {completerName}</Text>
+            <Text style={[s.completer, { color: th.sub }]} numberOfLines={1}>✓ {completerName}</Text>
           ) : null}
         </View>
         <TouchableOpacity
@@ -94,6 +96,7 @@ const s = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1, fontSize: 16, fontWeight: '600', fontFamily: FONT, letterSpacing: -0.2 },
   titleDone: { textDecorationLine: 'line-through' },
+  rightCol: { alignItems: 'flex-end', gap: 4 },
   dur: { fontSize: 13, fontFamily: FONT, fontWeight: '500' },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
   metaText: { fontSize: 12, fontFamily: FONT },
