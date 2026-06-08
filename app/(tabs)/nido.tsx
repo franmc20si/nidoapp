@@ -22,15 +22,20 @@ export default function NidoScreen() {
 
   const fetchProfiles = async () => {
     if (!household) return;
-    const { data } = await supabase
+    const { data: members } = await supabase
       .from('household_members')
-      .select('user_id, profiles(full_name)')
+      .select('user_id')
       .eq('household_id', household.id);
-    if (!data) return;
+    if (!members?.length) return;
+    const ids = members.map(m => m.user_id);
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', ids);
+    if (!profs) return;
     const map: Record<string, string> = {};
-    for (const m of data) {
-      const profile = (m as any).profiles;
-      if (profile?.full_name) map[m.user_id] = profile.full_name.split(' ')[0];
+    for (const p of profs) {
+      if (p.full_name) map[p.id] = p.full_name.split(' ')[0];
     }
     setProfiles(map);
   };
