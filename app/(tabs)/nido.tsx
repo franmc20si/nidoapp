@@ -13,11 +13,27 @@ import { IlluNidoLimpio, getCatIcon } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 
 export default function NidoScreen() {
-  const { household } = useAuthStore();
+  const { household, user } = useAuthStore();
   const { accent } = useNidoStore();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const fetchProfiles = async () => {
+    if (!household) return;
+    const { data } = await supabase
+      .from('household_members')
+      .select('user_id, profiles(full_name)')
+      .eq('household_id', household.id);
+    if (!data) return;
+    const map: Record<string, string> = {};
+    for (const m of data) {
+      const profile = (m as any).profiles;
+      if (profile?.full_name) map[m.user_id] = profile.full_name.split(' ')[0];
+    }
+    setProfiles(map);
+  };
 
   const fetchTasks = async () => {
     if (!household) return;
@@ -31,23 +47,26 @@ export default function NidoScreen() {
     );
     if (toReset.length > 0) {
       const ids = toReset.map(t => t.id);
-      await supabase.from('tasks').update({ is_done: false, due_date: null }).in('id', ids);
-      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; });
+      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null }).in('id', ids);
+      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; });
     }
 
     setTasks(tasks);
   };
 
-  useEffect(() => { fetchTasks(); }, [household]);
+  useEffect(() => { fetchTasks(); fetchProfiles(); }, [household]);
 
   const toggleTask = async (task: Task) => {
-    if (!task.is_done && task.is_recurring && task.recurrence_rule) {
+    const markingDone = !task.is_done;
+    const completedBy = markingDone ? (user?.id ?? null) : null;
+
+    if (markingDone && task.is_recurring && task.recurrence_rule) {
       const due = nextDueDate(task.recurrence_rule);
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true } : t));
-      await supabase.from('tasks').update({ is_done: true, due_date: due }).eq('id', task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: completedBy } : t));
+      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy }).eq('id', task.id);
     } else {
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !t.is_done } : t));
-      await supabase.from('tasks').update({ is_done: !task.is_done }).eq('id', task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: markingDone, completed_by: completedBy } : t));
+      await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy }).eq('id', task.id);
     }
   };
 
@@ -138,7 +157,12 @@ export default function NidoScreen() {
             </View>
           )}
           {shown.map((task) => (
-            <TaskCard key={task.id} task={task} onToggle={toggleTask} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              onToggle={toggleTask}
+              completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
+            />
           ))}
 
           {/* Add task button (ob-opt style) */}

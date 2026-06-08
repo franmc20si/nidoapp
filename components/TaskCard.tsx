@@ -12,9 +12,10 @@ interface Props {
   onToggle: (task: Task) => void;
   /** Called after the completion animation finishes (to remove from list). */
   onAnimatedOut?: (task: Task) => void;
+  completerName?: string | null;
 }
 
-export default function TaskCard({ task, onToggle, onAnimatedOut }: Props) {
+export default function TaskCard({ task, onToggle, onAnimatedOut, completerName }: Props) {
   const cat = catFor(task.category);
   const pts: number = task.points ?? 10;
   const min: number = task.duration_min ?? pts * 5;
@@ -67,6 +68,9 @@ export default function TaskCard({ task, onToggle, onAnimatedOut }: Props) {
             )}
             <Text style={[s.pts, { color: th.mark }]}>+{pts} pts</Text>
           </View>
+          {task.is_done && completerName ? (
+            <Text style={[s.completer, { color: th.sub }]}>✓ {completerName}</Text>
+          ) : null}
         </View>
         <TouchableOpacity
           style={[s.check, { borderColor: th.mark }, task.is_done && { backgroundColor: th.mark }]}
@@ -94,6 +98,7 @@ const s = StyleSheet.create({
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
   metaText: { fontSize: 12, fontFamily: FONT },
   pts: { fontSize: 12, fontWeight: '700', fontFamily: FONT },
+  completer: { fontSize: 11, fontFamily: FONT, marginTop: 4 },
   check: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   checkMark: { color: C.white, fontSize: 14, fontWeight: '700' },
 });
