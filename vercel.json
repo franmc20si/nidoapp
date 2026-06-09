@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export --platform web && cp -r public/* dist/",
+  "buildCommand": "npx expo export --platform web && cp -r public/* dist/ && node scripts/inject-head.js",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/manifest.json",       "destination": "/manifest.json" },
