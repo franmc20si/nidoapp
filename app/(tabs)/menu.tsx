@@ -231,54 +231,70 @@ export default function MenuScreen() {
   };
 
   const saveRecipe = async (data: Recipe) => {
-    if (!household?.id) return;
-    const isExisting = data.id && recipes.some(r => r.id === data.id);
+    const hid = household?.id;
+    const isExisting = !!(data.id && recipes.some(r => r.id === data.id));
+    const newId = isExisting ? data.id : 'rc' + Date.now();
+    const saved: Recipe = { ...data, id: newId };
+
+    // Update local state immediately so UI responds
     if (isExisting) {
-      await supabase.from('recipes').update({
-        name: data.name, color: data.color, meals: data.meals, ingredients: data.ingredients ?? [],
-      }).eq('id', data.id).eq('household_id', household.id);
-
-      setRecipes(rs => rs.map(r => r.id === data.id ? { ...r, ...data } : r));
-
-      // Remove from plans where meal type no longer matches
-      const updatedPlans = { ...weeklyPlans };
-      for (const wk in updatedPlans) {
-        const p = { ...updatedPlans[wk] };
-        Object.keys(p).forEach(k => {
-          const meal = k.split('-')[1];
-          if (p[k] === data.id && !data.meals.includes(meal as any)) delete p[k];
-        });
-        updatedPlans[wk] = p;
-        await upsertWeekPlan(wk, p);
-      }
-      setWeeklyPlans(updatedPlans);
+      setRecipes(rs => rs.map(r => r.id === data.id ? { ...r, ...saved } : r));
     } else {
-      const newRecipe: Recipe = { ...data, id: 'rc' + Date.now() };
-      await supabase.from('recipes').insert({
-        id: newRecipe.id, name: newRecipe.name, color: newRecipe.color,
-        meals: newRecipe.meals, ingredients: newRecipe.ingredients ?? [],
-        household_id: household.id,
-      });
-      setRecipes(rs => [...rs, newRecipe]);
+      setRecipes(rs => [...rs, saved]);
     }
     setEditing(null);
+
+    // Persist to Supabase in background (best-effort)
+    if (!hid) return;
+    try {
+      if (isExisting) {
+        await supabase.from('recipes').update({
+          name: saved.name, color: saved.color, meals: saved.meals, ingredients: saved.ingredients ?? [],
+        }).eq('id', saved.id).eq('household_id', hid);
+
+        const updatedPlans = { ...weeklyPlans };
+        for (const wk in updatedPlans) {
+          const p = { ...updatedPlans[wk] };
+          Object.keys(p).forEach(k => {
+            const meal = k.split('-')[1];
+            if (p[k] === data.id && !saved.meals.includes(meal as any)) delete p[k];
+          });
+          updatedPlans[wk] = p;
+          await upsertWeekPlan(wk, p);
+        }
+        setWeeklyPlans(updatedPlans);
+      } else {
+        await supabase.from('recipes').insert({
+          id: saved.id, name: saved.name, color: saved.color,
+          meals: saved.meals, ingredients: saved.ingredients ?? [],
+          household_id: hid,
+        });
+      }
+    } catch (e) {
+      console.error('[menu] saveRecipe error', e);
+    }
   };
 
   const deleteRecipe = async (id: string) => {
-    if (!household?.id) return;
-    await supabase.from('recipes').delete().eq('id', id).eq('household_id', household.id);
-
+    // Update local state immediately
     setRecipes(rs => rs.filter(r => r.id !== id));
-
     const updatedPlans = { ...weeklyPlans };
     for (const wk in updatedPlans) {
       const p = { ...updatedPlans[wk] };
       Object.keys(p).forEach(k => { if (p[k] === id) delete p[k]; });
       updatedPlans[wk] = p;
-      await upsertWeekPlan(wk, p);
     }
     setWeeklyPlans(updatedPlans);
     setEditing(null);
+
+    // Persist to Supabase in background
+    if (!household?.id) return;
+    try {
+      await supabase.from('recipes').delete().eq('id', id).eq('household_id', household.id);
+      for (const wk in updatedPlans) await upsertWeekPlan(wk, updatedPlans[wk]);
+    } catch (e) {
+      console.error('[menu] deleteRecipe error', e);
+    }
   };
 
   const dim = C.ink3;
