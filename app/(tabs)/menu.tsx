@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Modal, TextInput,
@@ -124,10 +125,9 @@ export default function MenuScreen() {
   const plan: Plan = weeklyPlans[wKey] ?? {};
 
   // ── persistence: load from Supabase (with AsyncStorage migration) ──────
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!household?.id) return;
-    (async () => {
-      try {
+    try {
         const [{ data: recipeRows }, { data: planRows }] = await Promise.all([
           supabase.from('recipes').select('*').eq('household_id', household.id),
           supabase.from('meal_plans').select('*').eq('household_id', household.id),
@@ -171,11 +171,13 @@ export default function MenuScreen() {
           planRows.forEach(row => { wp[row.week_key] = row.plan as Plan; });
           setWeeklyPlans(wp);
         }
-      } catch (e) {
-        console.error('[menu] load error', e);
-      }
-    })();
+    } catch (e) {
+      console.error('[menu] load error', e);
+    }
   }, [household?.id]);
+
+  useEffect(() => { loadData(); }, [household?.id]);
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   // ── helpers ────────────────────────────────────────────────────────────
   const recipeById = (id?: string) => id ? recipes.find(r => r.id === id) : undefined;

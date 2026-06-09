@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -62,7 +63,8 @@ export default function NidoScreen() {
     setTasks(tasks);
   };
 
-  useEffect(() => { fetchTasks(); fetchProfiles(); }, [household]);
+  useEffect(() => { fetchTasks(); fetchProfiles(); }, [household?.id]);
+  useFocusEffect(useCallback(() => { fetchTasks(); fetchProfiles(); }, [household?.id]));
 
   const toggleTask = async (task: Task) => {
     const markingDone = !task.is_done;
