@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ export default function NidoScreen() {
   const [statusFilter, setStatusFilter] = useState<'pendiente' | 'realizada' | 'todas'>('pendiente');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const fetchTokenRef = useRef(0);
 
   const fetchProfiles = async () => {
     if (!household) return;
@@ -47,17 +48,23 @@ export default function NidoScreen() {
 
   const fetchTasks = async () => {
     if (!household) return;
+    const token = ++fetchTokenRef.current;
+
     const { data } = await supabase.from('tasks').select('*')
       .eq('household_id', household.id).order('created_at', { ascending: false });
+
+    // Discard result if a newer fetch has started since this one
+    if (token !== fetchTokenRef.current) return;
+
     const tasks: Task[] = (data ?? []) as Task[];
 
-    // Reset recurring tasks whose next due date has arrived
     const toReset = tasks.filter(t =>
       t.is_done && t.is_recurring && isDueAgain(t.due_date)
     );
     if (toReset.length > 0) {
       const ids = toReset.map(t => t.id);
       await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids);
+      if (token !== fetchTokenRef.current) return;
       toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
     }
 
