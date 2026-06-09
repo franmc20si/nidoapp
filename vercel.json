@@ -5,6 +5,7 @@
     { "source": "/manifest.json",       "destination": "/manifest.json" },
     { "source": "/favicon.svg",         "destination": "/favicon.svg" },
     { "source": "/favicon.png",         "destination": "/favicon.png" },
+    { "source": "/nido_png.png",        "destination": "/nido_png.png" },
     { "source": "/icon-192.png",        "destination": "/icon-192.png" },
     { "source": "/icon-512.png",        "destination": "/icon-512.png" },
     { "source": "/icon-1024.png",       "destination": "/icon-1024.png" },
