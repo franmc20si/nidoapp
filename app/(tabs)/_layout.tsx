@@ -212,7 +212,7 @@ function CustomTabBar({ state, navigation }: any) {
   const { accent } = useNidoStore();
 
   const TABS = [
-    { name: 'index',   label: 'Hoy',     Icon: IconHome },
+    { name: 'index',   label: 'Semana',  Icon: IconHome },
     { name: 'nido',    label: 'Nido',    Icon: IconNest },
     { name: '__fab',   label: '',        Icon: null },
     { name: 'reparto', label: 'Reparto', Icon: IconChart },

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -39,6 +40,7 @@ async function resolveDestination(userId: string) {
   if (data?.households) return { route: '/(tabs)' as const, household: data.households as any };
   return { route: '/(auth)/onboarding' as const, household: null };
 }
+
 
 export default function RootLayout() {
   const { setSession, setProfile, setHousehold, session, isLoading } = useAuthStore();

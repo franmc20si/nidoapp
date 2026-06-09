@@ -50,7 +50,7 @@ export default function ViajesScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
-  topbar: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 16 },
+  topbar: { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 16 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
   title: { fontSize: 30, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.6 },
   tripCard: { marginHorizontal: 20, borderRadius: R.xl, padding: 22, marginBottom: 14, backgroundColor: C.sueloTint, borderWidth: 1, borderColor: C.suelo + '40' },

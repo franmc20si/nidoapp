@@ -7,15 +7,23 @@ import { recurrenceLabel } from '@/lib/recurrence';
 import { getCatIcon, IconCheck } from '@/components/icons';
 import { Task } from '@/types';
 
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(2);
+  return `${dd}/${mm}/${yy}`;
+}
+
 interface Props {
   task: Task;
   onToggle: (task: Task) => void;
-  /** Called after the completion animation finishes (to remove from list). */
   onAnimatedOut?: (task: Task) => void;
+  onPress?: (task: Task) => void;
   completerName?: string | null;
 }
 
-export default function TaskCard({ task, onToggle, onAnimatedOut, completerName }: Props) {
+export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, completerName }: Props) {
   const cat = catFor(task.category);
   const pts: number = task.points ?? 10;
   const min: number = task.duration_min ?? pts * 5;
@@ -48,7 +56,7 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, completerName 
         task.is_done && s.done,
       ]}
     >
-      <View style={s.row}>
+      <TouchableOpacity style={s.row} onPress={() => onPress?.(task)} activeOpacity={onPress ? 0.7 : 1}>
         <View style={[s.icon, { backgroundColor: th.chip }]}>
           <CatIcon size={20} color={th.mark} fill={th.bg} strokeWidth={2.4} />
         </View>
@@ -71,7 +79,9 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, completerName 
         <View style={s.rightCol}>
           <Text style={[s.dur, { color: th.sub }]}>{fmtDur(min)}</Text>
           {task.is_done && completerName ? (
-            <Text style={[s.completer, { color: th.sub }]} numberOfLines={1}>✓ {completerName}</Text>
+            <Text style={[s.completer, { color: th.sub }]} numberOfLines={1}>
+              ✓ {completerName}{task.completed_at ? ` el ${fmtDate(task.completed_at)}` : ''}
+            </Text>
           ) : null}
         </View>
         <TouchableOpacity
@@ -81,7 +91,7 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, completerName 
         >
           {task.is_done && <IconCheck size={14} color={C.white} strokeWidth={3} />}
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }

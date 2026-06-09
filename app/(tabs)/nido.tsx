@@ -11,6 +11,7 @@ import { AlertCards } from '@/components/AlertSystem';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
 import { IlluNidoLimpio, getCatIcon } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
+import TaskEditSheet from '@/components/TaskEditSheet';
 
 export default function NidoScreen() {
   const { household, user } = useAuthStore();
@@ -18,7 +19,9 @@ export default function NidoScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'pendiente' | 'realizada' | 'todas'>('pendiente');
   const [refreshing, setRefreshing] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const fetchProfiles = async () => {
     if (!household) return;
@@ -52,8 +55,8 @@ export default function NidoScreen() {
     );
     if (toReset.length > 0) {
       const ids = toReset.map(t => t.id);
-      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null }).in('id', ids);
-      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; });
+      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids);
+      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
     }
 
     setTasks(tasks);
@@ -64,18 +67,22 @@ export default function NidoScreen() {
   const toggleTask = async (task: Task) => {
     const markingDone = !task.is_done;
     const completedBy = markingDone ? (user?.id ?? null) : null;
+    const completedAt = markingDone ? new Date().toISOString() : null;
 
     if (markingDone && task.is_recurring && task.recurrence_rule) {
       const due = nextDueDate(task.recurrence_rule);
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: completedBy } : t));
-      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy }).eq('id', task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: completedBy, completed_at: completedAt } : t));
+      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
     } else {
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: markingDone, completed_by: completedBy } : t));
-      await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy }).eq('id', task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: markingDone, completed_by: completedBy, completed_at: completedAt } : t));
+      await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
     }
   };
 
-  const shown = selected ? tasks.filter((t) => t.category === selected) : tasks;
+  const byStatus = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
+                 : statusFilter === 'realizada'  ? tasks.filter(t => t.is_done)
+                 : tasks;
+  const shown = selected ? byStatus.filter((t) => t.category === selected) : byStatus;
 
   const total = tasks.length;
   const doneCount = tasks.filter((t) => t.is_done).length;
@@ -127,6 +134,22 @@ export default function NidoScreen() {
           </View>
         </View>
 
+        {/* Status filter pills */}
+        <View style={s.statusRow}>
+          {(['pendiente', 'realizada', 'todas'] as const).map((k) => (
+            <TouchableOpacity
+              key={k}
+              style={[s.statusPill, statusFilter === k && { backgroundColor: accent.hex, borderColor: accent.hex }]}
+              onPress={() => setStatusFilter(k)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.statusText, statusFilter === k && { color: C.white }]}>
+                {k === 'pendiente' ? 'Por hacer' : k === 'realizada' ? 'Realizadas' : 'Todas'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Category chips — wrap grid, no horizontal scroll */}
         <View style={s.chipsRow}>
           <TouchableOpacity style={[s.chip, !selected && { backgroundColor: accent.hex, borderColor: accent.hex }]} onPress={() => setSelected(null)} activeOpacity={0.8}>
@@ -166,6 +189,7 @@ export default function NidoScreen() {
               key={task.id}
               task={task}
               onToggle={toggleTask}
+              onPress={setEditingTask}
               completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
             />
           ))}
@@ -180,6 +204,14 @@ export default function NidoScreen() {
         </View>
 
       </ScrollView>
+
+      <TaskEditSheet
+        task={editingTask}
+        visible={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onSaved={(updated) => setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))}
+        onDeleted={(id) => setTasks(prev => prev.filter(t => t.id !== id))}
+      />
     </SafeAreaView>
   );
 }
@@ -187,7 +219,7 @@ export default function NidoScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
 
-  topbar: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 10, paddingBottom: 14 },
+  topbar: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title: { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
@@ -198,6 +230,10 @@ const s = StyleSheet.create({
   statDiv: { width: 1, backgroundColor: C.line, marginVertical: 2 },
   statNum: { fontSize: 24, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.5 },
   statLabel: { fontSize: 11, color: C.ink3, fontFamily: FONT, marginTop: 3 },
+
+  statusRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
+  statusPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
+  statusText: { fontSize: 13, fontWeight: '500', color: C.ink2, fontFamily: FONT },
 
   chipsRow: { paddingHorizontal: 20, paddingBottom: 14, gap: 8, flexDirection: 'row', flexWrap: 'wrap' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: C.card },

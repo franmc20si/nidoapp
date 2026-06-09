@@ -11,7 +11,29 @@ import { Task } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
+import TaskEditSheet from '@/components/TaskEditSheet';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+
+// ── menu helpers ─────────────────────────────────────────────────────────────
+function mixHex(a: string, b: string, t: number) {
+  const hex = (h: string): [number,number,number] => {
+    h = h.replace('#',''); if (h.length===3) h=h.split('').map(c=>c+c).join('');
+    const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255];
+  };
+  const x=hex(a), y=hex(b);
+  return '#'+[0,1,2].map(i=>Math.round(x[i]+(y[i]-x[i])*t).toString(16).padStart(2,'0')).join('');
+}
+
+function getMondayOfWeek(ref: Date): Date {
+  const m = new Date(ref); m.setDate(ref.getDate()-(ref.getDay()+6)%7); m.setHours(0,0,0,0); return m;
+}
+function isoWeekKey(d: Date): string {
+  const t = new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day = (t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
+  const yr = t.getUTCFullYear();
+  const wn = 1+Math.round(((t.getTime()-new Date(Date.UTC(yr,0,4)).getTime())/864e5-3+(new Date(Date.UTC(yr,0,4)).getUTCDay()+6)%7)/7);
+  return `${yr}-W${String(wn).padStart(2,'0')}`;
+}
 
 function getGreeting(name: string) {
   const h = new Date().getHours();
@@ -42,17 +64,44 @@ function getWeekDays() {
 }
 
 export default function HoyScreen() {
-  const { profile, household } = useAuthStore();
+  const { profile, household, user } = useAuthStore();
   const { accent, loadAccent } = useNidoStore();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [tab, setTab] = useState<'hoy' | 'manana' | 'todo'>('hoy');
+  const [tab, setTab] = useState<'pendiente' | 'hecho'>('pendiente');
   const [bellActive, setBellActive] = useState(false);
   const [nidoSheetVisible, setNidoSheetVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [menuRecipes, setMenuRecipes] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [todayComida, setTodayComida] = useState<string | undefined>();
+  const [todayCena,   setTodayCena]   = useState<string | undefined>();
 
   // Load saved accent when household is known
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
+
+  // Load today's menu from Supabase
+  const loadMenu = useCallback(async () => {
+    if (!household?.id) return;
+    try {
+      const wk = isoWeekKey(new Date());
+      const [{ data: recipeRows }, { data: planRows }] = await Promise.all([
+        supabase.from('recipes').select('id, name, color').eq('household_id', household.id),
+        supabase.from('meal_plans').select('plan').eq('household_id', household.id).eq('week_key', wk).maybeSingle(),
+      ]);
+      setMenuRecipes(recipeRows ?? []);
+      if (planRows?.plan) {
+        const plan = planRows.plan as Record<string, string>;
+        const dow = (new Date().getDay() + 6) % 7;
+        setTodayComida(plan[`${dow}-comida`]);
+        setTodayCena(plan[`${dow}-cena`]);
+      }
+    } catch {}
+  }, [household?.id]);
+
+  useEffect(() => { loadMenu(); }, [household?.id]);
+  useFocusEffect(useCallback(() => { loadMenu(); }, [loadMenu]));
 
   // Set browser theme-color meta tag on web
   useEffect(() => {
@@ -94,16 +143,35 @@ export default function HoyScreen() {
   useEffect(() => { fetchTasks(); }, [household]);
   useFocusEffect(useCallback(() => { fetchTasks(); }, [household]));
 
+  const fetchProfiles = useCallback(async () => {
+    if (!household) return;
+    const { data: members } = await supabase
+      .from('household_members').select('user_id').eq('household_id', household.id);
+    if (!members?.length) return;
+    const { data: profs } = await supabase
+      .from('profiles').select('id, full_name').in('id', members.map(m => m.user_id));
+    if (!profs) return;
+    const map: Record<string, string> = {};
+    for (const p of profs) { if (p.full_name) map[p.id] = p.full_name.split(' ')[0]; }
+    setProfiles(map);
+  }, [household]);
+
+  useEffect(() => { fetchProfiles(); }, [household]);
+
   const toggleTask = async (task: Task) => {
     const anyTask = task as any;
-    if (!task.is_done && task.is_recurring && anyTask.recurrence_rule) {
-      // Completing a recurring task: mark done + schedule next due date
+    const completing = !task.is_done;
+    const now = new Date().toISOString();
+    if (completing && task.is_recurring && anyTask.recurrence_rule) {
       const due = nextDueDate(anyTask.recurrence_rule);
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true } : t));
-      await supabase.from('tasks').update({ is_done: true, due_date: due }).eq('id', task.id);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: user?.id ?? null, completed_at: now } : t));
+      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: user?.id, completed_at: now }).eq('id', task.id);
     } else {
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !t.is_done } : t));
-      await supabase.from('tasks').update({ is_done: !task.is_done }).eq('id', task.id);
+      const patch = completing
+        ? { is_done: true,  completed_by: user?.id ?? null, completed_at: now }
+        : { is_done: false, completed_by: null, completed_at: null };
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t));
+      await supabase.from('tasks').update(patch).eq('id', task.id);
     }
   };
 
@@ -111,28 +179,26 @@ export default function HoyScreen() {
     setRemoved((prev) => new Set(prev).add(task.id));
   };
 
-  const todayStr    = new Date().toDateString();
-  const tomorrowStr = new Date(Date.now() + 86400000).toDateString();
+  const visible   = tasks.filter((t) => !removed.has(t.id));
+  const pending   = visible.filter((t) => !t.is_done);
+  const done      = visible.filter((t) => t.is_done);
+  const hoyTasks  = pending; // kept for greeting subtitle
 
-  const visible = tasks.filter((t) => !removed.has(t.id));
-  const pending = visible.filter((t) => !t.is_done);
-  const done    = visible.filter((t) => t.is_done);
+  const shown     = tab === 'hecho' ? done : pending;
 
-  const hoyTasks    = pending.filter((t) => {
+  // Weekly % — tasks due this week (Mon–Sun) or with no due date
+  const monday    = getMondayOfWeek(new Date());
+  const sunday    = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
+  const weekTasks = visible.filter((t) => {
     const due = (t as any).due_date;
-    if (!due) return true;                        // no date → show today
-    return new Date(due).toDateString() === todayStr || new Date(due) < new Date();
+    if (!due) return true;
+    const d = new Date(due);
+    return d >= monday && d <= sunday;
   });
-  const manTasks    = pending.filter((t) => {
-    const due = (t as any).due_date;
-    if (!due) return false;
-    return new Date(due).toDateString() === tomorrowStr;
-  });
-
-  const shown = tab === 'todo' ? visible : tab === 'manana' ? manTasks : hoyTasks;
-  const total    = visible.length;
-  const doneCount = done.length;
-  const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const weekDone  = weekTasks.filter((t) => t.is_done);
+  const total     = weekTasks.length;
+  const doneCount = weekDone.length;
+  const pct       = total ? Math.round((doneCount / total) * 100) : 0;
 
   return (
     <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
@@ -226,10 +292,35 @@ export default function HoyScreen() {
           ))}
         </View>
 
+        {/* Today's menu */}
+        {(todayComida || todayCena) && (() => {
+          const comida = menuRecipes.find(r => r.id === todayComida);
+          const cena   = menuRecipes.find(r => r.id === todayCena);
+          return (
+            <View style={n.menuCard}>
+              <Text style={n.menuLabel}>MENÚ DE HOY</Text>
+              <View style={n.menuCols}>
+                <View style={[n.menuCol, comida && { backgroundColor: mixHex(C.paper, comida.color, 0.22), borderColor: mixHex(C.paper, comida.color, 0.4) }]}>
+                  <Text style={n.menuSlot}>Comida</Text>
+                  <Text style={[n.menuDish, comida && { color: mixHex(comida.color, '#241E18', 0.55) }]} numberOfLines={2}>
+                    {comida ? comida.name : '—'}
+                  </Text>
+                </View>
+                <View style={[n.menuCol, cena && { backgroundColor: mixHex(C.paper, cena.color, 0.22), borderColor: mixHex(C.paper, cena.color, 0.4) }]}>
+                  <Text style={n.menuSlot}>Cena</Text>
+                  <Text style={[n.menuDish, cena && { color: mixHex(cena.color, '#241E18', 0.55) }]} numberOfLines={2}>
+                    {cena ? cena.name : '—'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
+
         {/* Nest hero */}
         <View style={[n.nestHero, { backgroundColor: accent.wash, borderColor: accent.hex + '28' }]}>
           <View style={n.nestHeroRow}>
-            <Text style={n.nestLabel}>TU NIDO HOY</Text>
+            <Text style={n.nestLabel}>TU NIDO ESTA SEMANA</Text>
             <Text style={n.nestCap}>
               {doneCount} de {total} {total === 1 ? 'tarea hecha' : 'tareas hechas'}
             </Text>
@@ -244,10 +335,10 @@ export default function HoyScreen() {
 
         {/* Filter pills */}
         <View style={n.filterRow}>
-          {(['hoy', 'manana', 'todo'] as const).map((k) => (
+          {(['pendiente', 'hecho'] as const).map((k) => (
             <TouchableOpacity key={k} style={[n.pill, tab === k && n.pillOn]} onPress={() => setTab(k)} activeOpacity={0.8}>
               <Text style={[n.pillText, tab === k && n.pillTextOn]}>
-                {k === 'hoy' ? 'Hoy' : k === 'manana' ? 'Mañana' : 'Todo'}
+                {k === 'pendiente' ? `Por hacer${pending.length ? ` · ${pending.length}` : ''}` : `Hecho${done.length ? ` · ${done.length}` : ''}`}
               </Text>
             </TouchableOpacity>
           ))}
@@ -257,9 +348,9 @@ export default function HoyScreen() {
         <View style={n.list}>
           {shown.length === 0 && (
             <View style={n.empty}>
-              <Text style={n.emptyEmoji}>✓</Text>
-              <Text style={n.emptyTitle}>Todo hecho por aquí</Text>
-              <Text style={n.emptySub}>No quedan tareas pendientes. Buen trabajo.</Text>
+              <Text style={n.emptyEmoji}>{tab === 'pendiente' ? '✓' : '○'}</Text>
+              <Text style={n.emptyTitle}>{tab === 'pendiente' ? '¡Todo hecho!' : 'Nada completado aún'}</Text>
+              <Text style={n.emptySub}>{tab === 'pendiente' ? 'No quedan tareas pendientes. Buen trabajo.' : 'Las tareas completadas aparecerán aquí.'}</Text>
             </View>
           )}
           {shown.map((task) => (
@@ -267,12 +358,22 @@ export default function HoyScreen() {
               key={task.id}
               task={task}
               onToggle={toggleTask}
-              onAnimatedOut={tab === 'todo' ? undefined : handleAnimatedOut}
+              onAnimatedOut={tab === 'pendiente' ? handleAnimatedOut : undefined}
+              onPress={setEditingTask}
+              completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
             />
           ))}
         </View>
 
       </ScrollView>
+
+      <TaskEditSheet
+        task={editingTask}
+        visible={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onSaved={(updated) => setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))}
+        onDeleted={(id) => setTasks(prev => prev.filter(t => t.id !== id))}
+      />
     </SafeAreaView>
   );
 }
@@ -280,7 +381,7 @@ export default function HoyScreen() {
 const n = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
 
-  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 10, paddingBottom: 12 },
+  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 12 },
   greetName: { fontSize: 27, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6 },
   greetSub: { fontSize: 13, color: C.ink3, fontFamily: FONT, marginTop: 2 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
@@ -312,6 +413,13 @@ const n = StyleSheet.create({
   weekNumText: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT },
   weekNumTextOn: { color: C.white },
   weekDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.brand },
+
+  menuCard:  { marginHorizontal: 20, marginBottom: 14 },
+  menuLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 8 },
+  menuCols:  { flexDirection: 'row', gap: 10 },
+  menuCol:   { flex: 1, borderRadius: R.l, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 12 },
+  menuSlot:  { fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 },
+  menuDish:  { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.2 },
 
   nestHero: { marginHorizontal: 20, borderRadius: R.l, borderWidth: 1, padding: 16 },
   nestHeroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },

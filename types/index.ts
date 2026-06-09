@@ -36,6 +36,7 @@ export interface Task {
   points: number | null;
   duration_min: number | null;
   completed_by: string | null;
+  completed_at: string | null;
   created_by: string;
   created_at: string;
 }

@@ -5,6 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "userInterfaceStyle": "automatic",
     "scheme": "nido",
     "ios": {
@@ -30,6 +35,13 @@
     "plugins": [
       "expo-router"
     ],
-    "experiments": {}
+    "experiments": {},
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "820859ad-223c-4fd6-8ab0-d7654cfea101"
+      }
+    },
+    "owner": "franmc20si"
   }
 }

@@ -16,7 +16,7 @@ interface Props {
 
 export default function NidoSheet({ visible, onClose }: Props) {
   const { user, household, setHousehold } = useAuthStore();
-  const { accent, accentKey, setAccent } = useNidoStore();
+  const { accent, accentKey, setAccent, loadAccent } = useNidoStore();
 
   // ── edit mode ────────────────────────────────────────────────────────────
   const [editName, setEditName] = useState('');
@@ -26,6 +26,38 @@ export default function NidoSheet({ visible, onClose }: Props) {
     if (visible && household?.name) setEditName(household.name);
   }, [visible, household?.name]);
   const [saving, setSaving] = useState(false);
+
+  // ── all households ───────────────────────────────────────────────────────
+  const [allHouseholds, setAllHouseholds] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!visible || !user) return;
+    supabase
+      .from('household_members')
+      .select('household_id, households(id, name)')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        if (!data) return;
+        const list = data
+          .map((r: any) => r.households)
+          .filter(Boolean) as { id: string; name: string }[];
+        setAllHouseholds(list);
+      });
+  }, [visible, user]);
+
+  const switchHousehold = async (h: { id: string; name: string }) => {
+    if (h.id === household?.id) return;
+    const { data } = await supabase
+      .from('households')
+      .select('*')
+      .eq('id', h.id)
+      .single();
+    if (data) {
+      setHousehold(data);
+      await loadAccent(data.id);
+    }
+    onClose();
+  };
 
   // ── add-nido mode ────────────────────────────────────────────────────────
   const [showAdd, setShowAdd] = useState(false);
@@ -167,6 +199,28 @@ export default function NidoSheet({ visible, onClose }: Props) {
                 </View>
               )}
 
+              {/* Switch nido */}
+              {allHouseholds.length > 1 && (
+                <>
+                  <Text style={sh.label}>Cambiar de nido</Text>
+                  {allHouseholds.map((h) => {
+                    const active = h.id === household?.id;
+                    return (
+                      <TouchableOpacity
+                        key={h.id}
+                        style={[sh.nidoRow, active && { borderColor: accent.hex }]}
+                        onPress={() => switchHousehold(h)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={sh.nidoRowNest}>🪺</Text>
+                        <Text style={[sh.nidoRowName, active && { color: accent.hex }]}>{h.name}</Text>
+                        {active && <Text style={[sh.nidoRowCheck, { color: accent.hex }]}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+
               {/* Add another nido */}
               <TouchableOpacity style={sh.addBtn} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
                 <View style={[sh.addIcon, { backgroundColor: accent.wash }]}>
@@ -268,7 +322,12 @@ const sh = StyleSheet.create({
   code: { fontFamily: 'monospace', fontWeight: '700', fontSize: 22, letterSpacing: 6 },
   codeSub: { fontSize: 12, color: C.ink3, fontFamily: FONT, marginTop: 4 },
 
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, padding: 14, marginTop: 20 },
+  nidoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.card, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, padding: 14, marginBottom: 8 },
+  nidoRowNest: { fontSize: 20 },
+  nidoRowName: { flex: 1, fontSize: 15, fontWeight: '500', color: C.ink, fontFamily: FONT },
+  nidoRowCheck: { fontSize: 16, fontWeight: '700' },
+
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, padding: 14, marginTop: 8 },
   addIcon: { width: 36, height: 36, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },
   addIconText: { fontSize: 22, fontWeight: '400', lineHeight: 26 },
   addText: { fontSize: 15, fontWeight: '600', color: C.ink, fontFamily: FONT },

@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
+import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 
 // ─── color helpers ─────────────────────────────────────────────────────────
@@ -68,8 +70,9 @@ function getWeekDays(monday: Date): Date[] {
 }
 
 // ─── types & storage ───────────────────────────────────────────────────────
+// Legacy AsyncStorage keys — used only for one-time migration
 const STORAGE_RECIPES = 'nido_recipes_v2';
-const STORAGE_PLANS   = 'nido_weekly_plans'; // { [weekKey]: Plan }
+const STORAGE_PLANS   = 'nido_weekly_plans';
 
 interface Recipe {
   id: string;
@@ -117,35 +120,59 @@ export default function MenuScreen() {
   // Current week's plan (derived)
   const plan: Plan = weeklyPlans[wKey] ?? {};
 
-  // ── persistence: load ──────────────────────────────────────────────────
+  // ── persistence: load from Supabase (with AsyncStorage migration) ──────
   useEffect(() => {
+    if (!household?.id) return;
     (async () => {
       try {
-        const [rRaw, pRaw] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_RECIPES),
-          AsyncStorage.getItem(STORAGE_PLANS),
+        const [{ data: recipeRows }, { data: planRows }] = await Promise.all([
+          supabase.from('recipes').select('*').eq('household_id', household.id),
+          supabase.from('meal_plans').select('*').eq('household_id', household.id),
         ]);
-        if (rRaw) {
-          const parsed = JSON.parse(rRaw);
-          if (Array.isArray(parsed) && parsed.length) setRecipes(parsed);
+
+        if (!recipeRows || recipeRows.length === 0) {
+          // One-time migration from AsyncStorage
+          const rRaw = await AsyncStorage.getItem(STORAGE_RECIPES);
+          if (rRaw) {
+            const parsed: Recipe[] = JSON.parse(rRaw);
+            if (Array.isArray(parsed) && parsed.length) {
+              await supabase.from('recipes').insert(
+                parsed.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: r.ingredients ?? [], household_id: household.id }))
+              );
+              setRecipes(parsed);
+              await AsyncStorage.removeItem(STORAGE_RECIPES);
+            } else {
+              setRecipes(DEFAULT_RECIPES);
+            }
+          } else {
+            setRecipes(DEFAULT_RECIPES);
+          }
+        } else {
+          setRecipes(recipeRows.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals as Recipe['meals'], ingredients: (r.ingredients ?? []) as Ingredient[] })));
         }
-        if (pRaw) {
-          const parsed = JSON.parse(pRaw);
-          if (parsed && typeof parsed === 'object') setWeeklyPlans(parsed);
+
+        if (!planRows || planRows.length === 0) {
+          // One-time migration from AsyncStorage
+          const pRaw = await AsyncStorage.getItem(STORAGE_PLANS);
+          if (pRaw) {
+            const parsed: WeeklyPlans = JSON.parse(pRaw);
+            if (parsed && typeof parsed === 'object') {
+              const rows = Object.entries(parsed).map(([week_key, plan]) => ({ household_id: household.id, week_key, plan }));
+              if (rows.length > 0) await supabase.from('meal_plans').insert(rows);
+              setWeeklyPlans(parsed);
+              await AsyncStorage.removeItem(STORAGE_PLANS);
+            }
+          }
+        } else {
+          const wp: WeeklyPlans = {};
+          planRows.forEach(row => { wp[row.week_key] = row.plan as Plan; });
+          setWeeklyPlans(wp);
         }
-      } catch {}
+      } catch (e) {
+        console.error('[menu] load error', e);
+      }
     })();
-  }, []);
-
-  // ── persistence: save recipes ──────────────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_RECIPES, JSON.stringify(recipes)).catch(() => {});
-  }, [recipes]);
-
-  // ── persistence: save plans ────────────────────────────────────────────
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_PLANS, JSON.stringify(weeklyPlans)).catch(() => {});
-  }, [weeklyPlans]);
+  }, [household?.id]);
 
   // ── helpers ────────────────────────────────────────────────────────────
   const recipeById = (id?: string) => id ? recipes.find(r => r.id === id) : undefined;
@@ -158,6 +185,7 @@ export default function MenuScreen() {
   }, [wKey]);
 
   const { accent } = useNidoStore();
+  const { household } = useAuthStore();
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
@@ -182,47 +210,72 @@ export default function MenuScreen() {
     return result;
   })();
 
+  const upsertWeekPlan = useCallback(async (wk: string, p: Plan) => {
+    if (!household?.id) return;
+    await supabase.from('meal_plans').upsert(
+      { household_id: household.id, week_key: wk, plan: p, updated_at: new Date().toISOString() },
+      { onConflict: 'household_id,week_key' }
+    );
+  }, [household?.id]);
+
   const assign = (rid: string | null) => {
     if (!pick) return;
     const k = `${pick.day}-${pick.meal}`;
-    setPlanForWeek(p => { const n = { ...p }; if (rid) n[k] = rid; else delete n[k]; return n; });
+    const newPlan: Plan = { ...(weeklyPlans[wKey] ?? {}) };
+    if (rid) newPlan[k] = rid; else delete newPlan[k];
+    setWeeklyPlans(wp => ({ ...wp, [wKey]: newPlan }));
+    upsertWeekPlan(wKey, newPlan);
     setPick(null);
   };
 
-  const saveRecipe = (data: Recipe) => {
+  const saveRecipe = async (data: Recipe) => {
+    if (!household?.id) return;
     const isExisting = data.id && recipes.some(r => r.id === data.id);
     if (isExisting) {
+      await supabase.from('recipes').update({
+        name: data.name, color: data.color, meals: data.meals, ingredients: data.ingredients ?? [],
+      }).eq('id', data.id).eq('household_id', household.id);
+
       setRecipes(rs => rs.map(r => r.id === data.id ? { ...r, ...data } : r));
-      // remove from plans where meal type no longer matches
-      setWeeklyPlans(wp => {
-        const updated = { ...wp };
-        for (const wk in updated) {
-          const p = { ...updated[wk] };
-          Object.keys(p).forEach(k => {
-            const meal = k.split('-')[1];
-            if (p[k] === data.id && !data.meals.includes(meal as any)) delete p[k];
-          });
-          updated[wk] = p;
-        }
-        return updated;
-      });
+
+      // Remove from plans where meal type no longer matches
+      const updatedPlans = { ...weeklyPlans };
+      for (const wk in updatedPlans) {
+        const p = { ...updatedPlans[wk] };
+        Object.keys(p).forEach(k => {
+          const meal = k.split('-')[1];
+          if (p[k] === data.id && !data.meals.includes(meal as any)) delete p[k];
+        });
+        updatedPlans[wk] = p;
+        await upsertWeekPlan(wk, p);
+      }
+      setWeeklyPlans(updatedPlans);
     } else {
-      setRecipes(rs => [...rs, { ...data, id: 'rc' + Date.now() }]);
+      const newRecipe: Recipe = { ...data, id: 'rc' + Date.now() };
+      await supabase.from('recipes').insert({
+        id: newRecipe.id, name: newRecipe.name, color: newRecipe.color,
+        meals: newRecipe.meals, ingredients: newRecipe.ingredients ?? [],
+        household_id: household.id,
+      });
+      setRecipes(rs => [...rs, newRecipe]);
     }
     setEditing(null);
   };
 
-  const deleteRecipe = (id: string) => {
+  const deleteRecipe = async (id: string) => {
+    if (!household?.id) return;
+    await supabase.from('recipes').delete().eq('id', id).eq('household_id', household.id);
+
     setRecipes(rs => rs.filter(r => r.id !== id));
-    setWeeklyPlans(wp => {
-      const updated = { ...wp };
-      for (const wk in updated) {
-        const p = { ...updated[wk] };
-        Object.keys(p).forEach(k => { if (p[k] === id) delete p[k]; });
-        updated[wk] = p;
-      }
-      return updated;
-    });
+
+    const updatedPlans = { ...weeklyPlans };
+    for (const wk in updatedPlans) {
+      const p = { ...updatedPlans[wk] };
+      Object.keys(p).forEach(k => { if (p[k] === id) delete p[k]; });
+      updatedPlans[wk] = p;
+      await upsertWeekPlan(wk, p);
+    }
+    setWeeklyPlans(updatedPlans);
     setEditing(null);
   };
 
@@ -243,9 +296,9 @@ export default function MenuScreen() {
 
             <Text style={s.rangeText} numberOfLines={1}>
               <Text style={{ color: dim }}>del </Text>
-              <Text style={s.rangeStrong}>{MN_DAYS_LONG[0].toLowerCase()} {first.getDate()}</Text>
+              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[0].toUpperCase()} {String(first.getDate()).padStart(2,'0')}</Text>
               <Text style={{ color: dim }}> al </Text>
-              <Text style={s.rangeStrong}>{MN_DAYS_LONG[6].toLowerCase()} {last.getDate()}</Text>
+              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[6].toUpperCase()} {String(last.getDate()).padStart(2,'0')}</Text>
               <Text style={{ color: dim }}> de {MN_MONTHS[last.getMonth()]}</Text>
             </Text>
 
@@ -678,7 +731,7 @@ const s = StyleSheet.create({
 
   topbar: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, gap: 12,
+    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, gap: 12,
   },
   eyebrow: {
     fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT,

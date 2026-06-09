@@ -67,16 +67,16 @@ export default function ProfileScreen() {
 
     setUploadingPhoto(true);
     try {
-      const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const mime = asset.mimeType ?? 'image/jpeg';
+      const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
       const path = `${user!.id}/avatar.${ext}`;
 
-      // fetch blob from uri
       const response = await fetch(asset.uri);
       const blob = await response.blob();
 
       const { error: upError } = await supabase.storage
         .from('avatars')
-        .upload(path, blob, { upsert: true, contentType: `image/${ext}` });
+        .upload(path, blob, { upsert: true, contentType: mime });
 
       if (upError) throw upError;
 
@@ -313,7 +313,7 @@ export default function ProfileScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
-  topbar: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 4 },
+  topbar: { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 4 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
 
   hero: { alignItems: 'center', paddingTop: 12, paddingBottom: 24 },
