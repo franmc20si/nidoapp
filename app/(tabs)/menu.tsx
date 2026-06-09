@@ -111,6 +111,9 @@ export default function MenuScreen() {
   const todayDow      = (today.getDay() + 6) % 7; // Mon=0
   const isThisWeek    = offset === 0;
 
+  const { accent } = useNidoStore();
+  const { household } = useAuthStore();
+
   // Recipes (shared across all weeks)
   const [recipes, setRecipes] = useState<Recipe[]>(DEFAULT_RECIPES);
 
@@ -183,9 +186,6 @@ export default function MenuScreen() {
       [wKey]: updater(wp[wKey] ?? {}),
     }));
   }, [wKey]);
-
-  const { accent } = useNidoStore();
-  const { household } = useAuthStore();
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
