@@ -1,41 +1,12 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { ensureProfile, resolveDestination } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
 
-async function ensureProfile(user: User) {
-  const { data: existing } = await supabase
-    .from('profiles')
-    .select()
-    .eq('id', user.id)
-    .maybeSingle();
-  if (existing) return existing;
-  const meta = user.user_metadata ?? {};
-  const name = meta.full_name ?? meta.name ?? user.email ?? '';
-  const avatar = meta.avatar_url ?? null;
-  const { data } = await supabase
-    .from('profiles')
-    .insert({ id: user.id, full_name: name, avatar_url: avatar })
-    .select()
-    .single();
-  return data;
-}
-
-async function resolveDestination(userId: string) {
-  const { data } = await supabase
-    .from('household_members')
-    .select('household_id, households(*)')
-    .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle();
-  if (data?.households) return '/(tabs)' as const;
-  return '/(auth)/onboarding' as const;
-}
-
 export default function AuthCallback() {
-  const { setSession, setProfile } = useAuthStore();
+  const { setSession, setProfile, setHousehold } = useAuthStore();
   const [status, setStatus] = useState('Conectando...');
 
   useEffect(() => {
@@ -47,7 +18,8 @@ export default function AuthCallback() {
       setSession(session);
       const profile = await ensureProfile(session.user);
       if (profile) setProfile(profile);
-      const route = await resolveDestination(session.user.id);
+      const { route, household } = await resolveDestination(session.user.id);
+      if (household) setHousehold(household);
       router.replace(route);
     };
 

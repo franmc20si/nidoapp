@@ -11,6 +11,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
+import { showToast } from '@/store/toastStore';
 
 // ─── color helpers ─────────────────────────────────────────────────────────
 function hexToRgb(h: string): [number, number, number] {
@@ -72,8 +73,9 @@ function getWeekDays(monday: Date): Date[] {
 
 // ─── types & storage ───────────────────────────────────────────────────────
 // Legacy AsyncStorage keys — used only for one-time migration
-const STORAGE_RECIPES = 'nido_recipes_v2';
-const STORAGE_PLANS   = 'nido_weekly_plans';
+const STORAGE_RECIPES        = 'nido_recipes_v2';
+const STORAGE_PLANS          = 'nido_weekly_plans';
+const STORAGE_MIGRATION_DONE = 'nido_menu_migrated_v1';
 
 interface Recipe {
   id: string;
@@ -128,51 +130,66 @@ export default function MenuScreen() {
   const loadData = useCallback(async () => {
     if (!household?.id) return;
     try {
-        const [{ data: recipeRows }, { data: planRows }] = await Promise.all([
-          supabase.from('recipes').select('*').eq('household_id', household.id),
-          supabase.from('meal_plans').select('*').eq('household_id', household.id),
-        ]);
+      const [{ data: recipeRows }, { data: planRows }, migrationDoneRaw] = await Promise.all([
+        supabase.from('recipes').select('*').eq('household_id', household.id),
+        supabase.from('meal_plans').select('*').eq('household_id', household.id),
+        AsyncStorage.getItem(STORAGE_MIGRATION_DONE),
+      ]);
 
-        if (!recipeRows || recipeRows.length === 0) {
-          // One-time migration from AsyncStorage
-          const rRaw = await AsyncStorage.getItem(STORAGE_RECIPES);
-          if (rRaw) {
-            const parsed: Recipe[] = JSON.parse(rRaw);
-            if (Array.isArray(parsed) && parsed.length) {
-              await supabase.from('recipes').insert(
-                parsed.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: r.ingredients ?? [], household_id: household.id }))
-              );
-              setRecipes(parsed);
-              await AsyncStorage.removeItem(STORAGE_RECIPES);
-            } else {
-              setRecipes(DEFAULT_RECIPES);
-            }
+      const migrationDone = !!migrationDoneRaw;
+
+      // ── Recipes ──────────────────────────────────────────────────────────
+      if (recipeRows && recipeRows.length > 0) {
+        setRecipes(recipeRows.map(r => ({
+          id: r.id, name: r.name, color: r.color,
+          meals: r.meals as Recipe['meals'],
+          ingredients: (r.ingredients ?? []) as Ingredient[],
+        })));
+      } else if (!migrationDone) {
+        const rRaw = await AsyncStorage.getItem(STORAGE_RECIPES);
+        if (rRaw) {
+          const parsed: Recipe[] = JSON.parse(rRaw);
+          if (Array.isArray(parsed) && parsed.length) {
+            await supabase.from('recipes').insert(
+              parsed.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: r.ingredients ?? [], household_id: household.id }))
+            );
+            setRecipes(parsed);
+            await AsyncStorage.removeItem(STORAGE_RECIPES);
           } else {
             setRecipes(DEFAULT_RECIPES);
           }
         } else {
-          setRecipes(recipeRows.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals as Recipe['meals'], ingredients: (r.ingredients ?? []) as Ingredient[] })));
+          setRecipes(DEFAULT_RECIPES);
         }
+      } else {
+        setRecipes(DEFAULT_RECIPES);
+      }
 
-        if (!planRows || planRows.length === 0) {
-          // One-time migration from AsyncStorage
-          const pRaw = await AsyncStorage.getItem(STORAGE_PLANS);
-          if (pRaw) {
-            const parsed: WeeklyPlans = JSON.parse(pRaw);
-            if (parsed && typeof parsed === 'object') {
-              const rows = Object.entries(parsed).map(([week_key, plan]) => ({ household_id: household.id, week_key, plan }));
-              if (rows.length > 0) await supabase.from('meal_plans').insert(rows);
-              setWeeklyPlans(parsed);
-              await AsyncStorage.removeItem(STORAGE_PLANS);
-            }
+      // ── Plans ─────────────────────────────────────────────────────────────
+      if (planRows && planRows.length > 0) {
+        const wp: WeeklyPlans = {};
+        planRows.forEach(row => { wp[row.week_key] = row.plan as Plan; });
+        setWeeklyPlans(wp);
+      } else if (!migrationDone) {
+        const pRaw = await AsyncStorage.getItem(STORAGE_PLANS);
+        if (pRaw) {
+          const parsed: WeeklyPlans = JSON.parse(pRaw);
+          if (parsed && typeof parsed === 'object') {
+            const rows = Object.entries(parsed).map(([week_key, plan]) => ({ household_id: household.id, week_key, plan }));
+            if (rows.length > 0) await supabase.from('meal_plans').insert(rows);
+            setWeeklyPlans(parsed);
+            await AsyncStorage.removeItem(STORAGE_PLANS);
           }
-        } else {
-          const wp: WeeklyPlans = {};
-          planRows.forEach(row => { wp[row.week_key] = row.plan as Plan; });
-          setWeeklyPlans(wp);
         }
-    } catch (e) {
+      }
+
+      // Mark migration as done so it never re-runs
+      if (!migrationDone) {
+        await AsyncStorage.setItem(STORAGE_MIGRATION_DONE, '1');
+      }
+    } catch (e: any) {
       console.error('[menu] load error', e);
+      showToast('No se pudieron cargar los datos del menú', 'error');
     }
   }, [household?.id]);
 
@@ -270,8 +287,9 @@ export default function MenuScreen() {
           household_id: hid,
         });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('[menu] saveRecipe error', e);
+      showToast('No se pudo guardar el plato', 'error');
     }
   };
 
@@ -292,8 +310,9 @@ export default function MenuScreen() {
     try {
       await supabase.from('recipes').delete().eq('id', id).eq('household_id', household.id);
       for (const wk in updatedPlans) await upsertWeekPlan(wk, updatedPlans[wk]);
-    } catch (e) {
+    } catch (e: any) {
       console.error('[menu] deleteRecipe error', e);
+      showToast('No se pudo eliminar el plato', 'error');
     }
   };
 
@@ -451,6 +470,7 @@ export default function MenuScreen() {
         weekLabel={`Semana ${week}`}
         recipeItems={weekIngredients}
         accent={accent}
+        householdId={household?.id ?? ''}
       />
     </SafeAreaView>
   );

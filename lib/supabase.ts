@@ -2,8 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://tdwpdnvwneajnqiezjbf.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkd3BkbnZ3bmVham5xaWV6amJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMTA3ODUsImV4cCI6MjA5NTc4Njc4NX0.vJcnAgqSPK7xgrBuXNsxkvZxWSyeUVE8H0LY9mZf2o8';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Faltan variables de entorno EXPO_PUBLIC_SUPABASE_URL y/o EXPO_PUBLIC_SUPABASE_ANON_KEY. ' +
+    'Copia .env.example a .env.local y rellena los valores.'
+  );
+}
 
 // On web use the browser's localStorage (Supabase default) so detectSessionInUrl
 // can read OAuth tokens from the URL hash correctly.

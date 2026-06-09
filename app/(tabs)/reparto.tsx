@@ -9,6 +9,14 @@ import { AchFlame, AchNest, AchStar, AchTrophy, AchGem } from '@/components/icon
 
 const MEMBER_COLORS = [C.brand, C.suelo, '#7FA86A', '#A881F2', '#D97B66'];
 
+function getStartDate(period: 'semana' | 'mes' | 'ano'): string {
+  const d = new Date();
+  if (period === 'semana') d.setDate(d.getDate() - 7);
+  else if (period === 'mes')  d.setDate(d.getDate() - 30);
+  else                        d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString();
+}
+
 const ACHIEVEMENTS = [
   { Icon: AchFlame,  title: 'Racha de 5', desc: '5 días seguidos', unlocked: true },
   { Icon: AchNest,   title: 'Nido lleno', desc: '100% en un día',  unlocked: true },
@@ -28,43 +36,55 @@ export default function RepartoScreen() {
 
   const loadMembers = async () => {
     if (!household) return;
-    (async () => {
-      // Fetch members of this household with their profiles
-      const { data: memberRows } = await supabase
-        .from('household_members')
-        .select('user_id, profiles(full_name)')
-        .eq('household_id', household.id);
 
-      // Fetch done tasks to count points and tasks per user
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('created_by, points, is_done')
-        .eq('household_id', household.id)
-        .eq('is_done', true);
+    const { data: memberRows } = await supabase
+      .from('household_members')
+      .select('user_id, profiles(full_name)')
+      .eq('household_id', household.id);
 
-      const built: Member[] = (memberRows ?? []).map((row: any, i: number) => {
-        const name = row.profiles?.full_name ?? 'Miembro';
-        const isMe = row.user_id === user?.id;
-        const userTasks = (tasks ?? []).filter((t: any) => t.created_by === row.user_id);
-        return {
-          id: row.user_id,
-          name: isMe ? 'Tú' : name.split(' ')[0],
-          ini: (isMe ? 'T' : name[0] ?? '?').toUpperCase(),
-          color: MEMBER_COLORS[i % MEMBER_COLORS.length],
-          pts: userTasks.reduce((s: number, t: any) => s + (t.points ?? 10), 0),
-          tasks: userTasks.length,
-        };
-      });
-      // Put current user first
-      built.sort((a) => (a.id === user?.id ? -1 : 1));
-      setMembers(built);
-    })();
+    // Filter completed tasks by period using completed_at
+    let taskQuery = supabase
+      .from('tasks')
+      .select('completed_by, points')
+      .eq('household_id', household.id)
+      .eq('is_done', true)
+      .gte('completed_at', getStartDate(period));
+
+    const { data: tasks } = await taskQuery;
+
+    const built: Member[] = (memberRows ?? []).map((row: any, i: number) => {
+      const name = row.profiles?.full_name ?? 'Miembro';
+      const isMe = row.user_id === user?.id;
+      // completed_by tracks who actually did the task
+      const userTasks = (tasks ?? []).filter((t: any) => t.completed_by === row.user_id);
+      return {
+        id: row.user_id,
+        name: isMe ? 'Tú' : name.split(' ')[0],
+        ini: (isMe ? 'T' : name[0] ?? '?').toUpperCase(),
+        color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+        pts: userTasks.reduce((s: number, t: any) => s + (t.points ?? 10), 0),
+        tasks: userTasks.length,
+      };
+    });
+    built.sort((a) => (a.id === user?.id ? -1 : 1));
+    setMembers(built);
   };
 
-  useEffect(() => { loadMembers(); }, [household]);
+  useEffect(() => { loadMembers(); }, [household, period]);
 
   const MEMBERS = members;
   const totalPts = MEMBERS.reduce((s, m) => s + m.pts, 0) || 1;
+
+  const periodLabel = period === 'semana' ? 'Esta semana' : period === 'mes' ? 'Este mes' : 'Este año';
+
+  const balanceStatus = (() => {
+    if (MEMBERS.length < 2) return { label: 'Solo/a', desc: 'Eres el único miembro activo.' };
+    const pcts = MEMBERS.map(m => m.pts / totalPts);
+    const diff = Math.max(...pcts) - Math.min(...pcts);
+    if (diff < 0.15) return { label: 'Equilibrado',   desc: 'El reparto entre vosotros está bastante igualado.' };
+    if (diff < 0.35) return { label: 'Algo desigual', desc: 'Hay algo de diferencia en el reparto de tareas.' };
+    return              { label: 'Desigual',       desc: 'El reparto está bastante descompensado.' };
+  })();
 
   return (
     <SafeAreaView style={s.root}>
@@ -108,8 +128,8 @@ export default function RepartoScreen() {
           <View style={s.balanceHead}>
             <View style={{ flex: 1 }}>
               <Text style={s.balanceLabel}>Equilibrio del nido</Text>
-              <Text style={s.balanceStatus}>Equilibrado</Text>
-              <Text style={s.balanceCap}>El reparto entre vosotros está bastante igualado.</Text>
+              <Text style={s.balanceStatus}>{balanceStatus.label}</Text>
+              <Text style={s.balanceCap}>{balanceStatus.desc}</Text>
             </View>
             <View style={s.streakPill}>
               <Text style={s.streakText}>🔥 5</Text>
@@ -159,7 +179,7 @@ export default function RepartoScreen() {
         </ScrollView>
 
         {/* Member breakdown */}
-        <Text style={s.sectionHeader}>Este mes</Text>
+        <Text style={s.sectionHeader}>{periodLabel}</Text>
         <View style={s.breakdownCard}>
           {MEMBERS.map((m, i) => (
             <View key={m.name} style={[s.breakRow, i > 0 && s.breakRowBorder]}>

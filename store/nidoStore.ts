@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { nidoColorByKey, DEFAULT_COLOR, NidoColor } from '@/constants/nidoColors';
+import { supabase } from '@/lib/supabase';
 
-const STORAGE_KEY = 'nido_accent_map'; // { [householdId]: colorKey }
+const STORAGE_KEY = 'nido_accent_map'; // { [householdId]: colorKey } — caché local offline
 
 // Cross-platform storage helpers
 const storageGet = async (key: string): Promise<string | null> => {
@@ -20,9 +21,31 @@ const storageSet = async (key: string, value: string): Promise<void> => {
   await AsyncStorage.setItem(key, value);
 };
 
+async function cacheAccent(householdId: string, colorKey: string) {
+  try {
+    const raw = await storageGet(STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    map[householdId] = colorKey;
+    await storageSet(STORAGE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+async function getCachedAccent(householdId: string): Promise<string | null> {
+  try {
+    const raw = await storageGet(STORAGE_KEY);
+    const map = raw ? JSON.parse(raw) : {};
+    return map[householdId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 interface NidoState {
   accentKey: string;
   accent: NidoColor;
+  fabOpen: boolean;
+  openFab: () => void;
+  closeFab: () => void;
   loadAccent: (householdId: string) => Promise<void>;
   setAccent: (householdId: string, key: string) => Promise<void>;
 }
@@ -30,25 +53,49 @@ interface NidoState {
 export const useNidoStore = create<NidoState>((set) => ({
   accentKey: DEFAULT_COLOR.key,
   accent: DEFAULT_COLOR,
+  fabOpen: false,
+  openFab: () => set({ fabOpen: true }),
+  closeFab: () => set({ fabOpen: false }),
 
   loadAccent: async (householdId) => {
+    // Aplica caché local de inmediato para evitar parpadeo
+    const cached = await getCachedAccent(householdId);
+    if (cached) {
+      set({ accentKey: cached, accent: nidoColorByKey(cached) });
+    }
+
+    // Luego comprueba Supabase (fuente de verdad multi-dispositivo)
     try {
-      const raw = await storageGet(STORAGE_KEY);
-      const map = raw ? JSON.parse(raw) : {};
-      const key = map[householdId] ?? DEFAULT_COLOR.key;
+      const { data } = await supabase
+        .from('households')
+        .select('accent_color')
+        .eq('id', householdId)
+        .single();
+
+      const key = data?.accent_color ?? cached ?? DEFAULT_COLOR.key;
       set({ accentKey: key, accent: nidoColorByKey(key) });
+      await cacheAccent(householdId, key);
     } catch {
-      set({ accentKey: DEFAULT_COLOR.key, accent: DEFAULT_COLOR });
+      // Sin conexión: el caché local ya está aplicado
+      if (!cached) {
+        set({ accentKey: DEFAULT_COLOR.key, accent: DEFAULT_COLOR });
+      }
     }
   },
 
   setAccent: async (householdId, key) => {
-    try {
-      const raw = await storageGet(STORAGE_KEY);
-      const map = raw ? JSON.parse(raw) : {};
-      map[householdId] = key;
-      await storageSet(STORAGE_KEY, JSON.stringify(map));
-    } catch {}
+    // Actualiza UI de inmediato (optimista)
     set({ accentKey: key, accent: nidoColorByKey(key) });
+    await cacheAccent(householdId, key);
+
+    // Persiste en Supabase para sincronización multi-dispositivo
+    try {
+      await supabase
+        .from('households')
+        .update({ accent_color: key })
+        .eq('id', householdId);
+    } catch {
+      // Silencioso: el caché local garantiza que el cambio no se pierde en este dispositivo
+    }
   },
 }));

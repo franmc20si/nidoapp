@@ -16,6 +16,7 @@ import {
   IconChart as IcoChart, IconMenu as IcoMenu,
   IconPlus as IcoPlus, getCatIcon,
 } from '@/components/icons';
+import { ToastBar } from '@/components/ToastBar';
 
 function IconHome({ active, accent }: { active: boolean; accent: string }) {
   return <IcoHome size={22} color={active ? accent : C.ink3} fill="transparent" strokeWidth={active ? 2.6 : 2} />;
@@ -208,8 +209,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
 }
 
 function CustomTabBar({ state, navigation }: any) {
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const { accent } = useNidoStore();
+  const { accent, fabOpen, closeFab, openFab } = useNidoStore();
 
   const TABS = [
     { name: 'index',   label: 'Semana',  Icon: IconHome },
@@ -221,13 +221,13 @@ function CustomTabBar({ state, navigation }: any) {
 
   return (
     <>
-      <AddSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} />
+      <AddSheet visible={fabOpen} onClose={closeFab} />
       <View style={tb.bar}>
         {TABS.map((tab) => {
           if (tab.name === '__fab') {
             return (
               <View key="fab" style={tb.fabWrap}>
-                <TouchableOpacity style={[tb.fab, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={() => setSheetVisible(true)} activeOpacity={0.85}>
+                <TouchableOpacity style={[tb.fab, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={openFab} activeOpacity={0.85}>
                   <IcoPlus size={26} color={C.white} strokeWidth={2.6} />
                 </TouchableOpacity>
               </View>
@@ -257,13 +257,16 @@ function CustomTabBar({ state, navigation }: any) {
 
 export default function TabsLayout() {
   return (
-    <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="nido" />
-      <Tabs.Screen name="reparto" />
-      <Tabs.Screen name="menu" />
-      <Tabs.Screen name="household" options={{ href: null }} />
-    </Tabs>
+    <>
+      <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="nido" />
+        <Tabs.Screen name="reparto" />
+        <Tabs.Screen name="menu" />
+        <Tabs.Screen name="household" options={{ href: null }} />
+      </Tabs>
+      <ToastBar />
+    </>
   );
 }
 

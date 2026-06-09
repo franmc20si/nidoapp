@@ -4,13 +4,21 @@
  * Combina automáticamente los ingredientes de los platos del menú de la semana
  * con artículos añadidos manualmente, agrupados por orden de supermercado.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
   StyleSheet, TextInput, Animated, useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+
+function genId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 // ─── Supermarket categories (typical Spanish order) ──────────────────────────
 export interface GroceryCat { key: string; label: string; emoji: string; }
@@ -85,9 +93,10 @@ interface Props {
   weekLabel: string;       // e.g. "Semana 22"
   recipeItems: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string }[];
   accent: { hex: string; wash: string };
+  householdId: string;
 }
 
-export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel, recipeItems, accent }: Props) {
+export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel, recipeItems, accent, householdId }: Props) {
   const { height: screenHeight } = useWindowDimensions();
   const [checked,     setChecked]     = useState<Set<string>>(new Set());
   const [manualItems, setManualItems] = useState<ManualItem[]>([]);
@@ -96,43 +105,120 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   const [addAmount,   setAddAmount]   = useState('');
   const [showAdd,     setShowAdd]     = useState(false);
   const [catFilter,   setCatFilter]   = useState<string | null>(null);
+  const listIdRef = useRef<string | null>(null);
 
-  // Load state when opening
+  // Load state when opening — manual items from Supabase, recipe checked from AsyncStorage
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !householdId) return;
     (async () => {
-      const [c, m] = await Promise.all([loadChecked(weekKey), loadManual(weekKey)]);
-      setChecked(c);
-      setManualItems(m);
-    })();
-  }, [visible, weekKey]);
+      const recipeChecked = await loadChecked(weekKey);
+      setChecked(recipeChecked);
 
-  // Persist checked state
-  const toggleChecked = useCallback(async (id: string) => {
+      // Get or create the shopping_list record for this week
+      const { data: existing } = await supabase
+        .from('shopping_lists')
+        .select('id')
+        .eq('household_id', householdId)
+        .eq('week_key', weekKey)
+        .maybeSingle();
+
+      let lid: string | null = existing?.id ?? null;
+      if (!lid) {
+        const { data: created } = await supabase
+          .from('shopping_lists')
+          .insert({ household_id: householdId, week_key: weekKey })
+          .select('id')
+          .single();
+        lid = created?.id ?? null;
+      }
+      listIdRef.current = lid;
+
+      if (!lid) return;
+
+      const { data: items } = await supabase
+        .from('shopping_items')
+        .select('id, name, unit, category, is_checked')
+        .eq('list_id', lid);
+
+      if (items?.length) {
+        setManualItems(items.map(i => ({
+          id: i.id,
+          name: i.name,
+          amount: i.unit ?? undefined,
+          category: i.category ?? 'otros',
+        })));
+        // Merge Supabase checked state for manual items
+        setChecked(prev => {
+          const next = new Set(prev);
+          items.forEach(i => { if (i.is_checked) next.add(i.id); });
+          return next;
+        });
+      } else {
+        // One-time migration from AsyncStorage per week
+        const migKey = `nido_shop_migrated_${weekKey}`;
+        const done = await AsyncStorage.getItem(migKey);
+        if (!done) {
+          const legacy = await loadManual(weekKey);
+          if (legacy.length > 0) {
+            await supabase.from('shopping_items').upsert(
+              legacy.map(m => ({
+                id: m.id,
+                list_id: lid,
+                name: m.name,
+                unit: m.amount ?? null,
+                category: m.category,
+                is_checked: recipeChecked.has(m.id),
+              }))
+            );
+            setManualItems(legacy);
+          }
+          await AsyncStorage.setItem(migKey, '1');
+        }
+      }
+    })();
+  }, [visible, weekKey, householdId]);
+
+  // Toggle checked: recipe items → AsyncStorage, manual items → Supabase
+  const toggleChecked = useCallback((id: string) => {
     setChecked(prev => {
+      const willBeChecked = !prev.has(id);
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      saveChecked(weekKey, next);
+      if (willBeChecked) next.add(id); else next.delete(id);
+      if (id.startsWith('ri-')) {
+        saveChecked(weekKey, next);
+      } else if (listIdRef.current) {
+        supabase.from('shopping_items').update({ is_checked: willBeChecked }).eq('id', id);
+      }
       return next;
     });
   }, [weekKey]);
 
-  // Persist manual items
+  // Add manual item — sync to Supabase
   const addManual = async () => {
     if (!addName.trim()) return;
-    const item: ManualItem = { id: 'mi' + Date.now(), name: addName.trim(), amount: addAmount.trim() || undefined, category: addCat };
-    const next = [...manualItems, item];
-    setManualItems(next);
-    await saveManual(weekKey, next);
+    const id = genId();
+    const item: ManualItem = { id, name: addName.trim(), amount: addAmount.trim() || undefined, category: addCat };
+    setManualItems(prev => [...prev, item]);
     setAddName(''); setAddAmount(''); setShowAdd(false);
+    if (listIdRef.current) {
+      await supabase.from('shopping_items').insert({
+        id,
+        list_id: listIdRef.current,
+        name: item.name,
+        unit: item.amount ?? null,
+        category: item.category,
+        is_checked: false,
+      });
+    }
   };
 
+  // Remove manual item — sync to Supabase
   const removeManual = async (id: string) => {
-    const next = manualItems.filter(m => m.id !== id);
-    setManualItems(next);
-    await saveManual(weekKey, next);
-    // also uncheck
-    const c = new Set(checked); c.delete(id); setChecked(c); saveChecked(weekKey, c);
+    setManualItems(prev => prev.filter(m => m.id !== id));
+    setChecked(prev => { const next = new Set(prev); next.delete(id); saveChecked(weekKey, next); return next; });
+    if (listIdRef.current) {
+      await supabase.from('shopping_items').delete().eq('id', id);
+    }
   };
 
   // Build merged item list

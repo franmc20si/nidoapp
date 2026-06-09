@@ -13,10 +13,11 @@ import { nextDueDate, isDueAgain } from '@/lib/recurrence';
 import { IlluNidoLimpio, getCatIcon } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 import TaskEditSheet from '@/components/TaskEditSheet';
+import { showToast } from '@/store/toastStore';
 
 export default function NidoScreen() {
   const { household, user } = useAuthStore();
-  const { accent } = useNidoStore();
+  const { accent, openFab } = useNidoStore();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null);
@@ -74,10 +75,12 @@ export default function NidoScreen() {
     if (markingDone && task.is_recurring && task.recurrence_rule) {
       const due = nextDueDate(task.recurrence_rule);
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: completedBy, completed_at: completedAt } : t));
-      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
+      const { error } = await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
+      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: false } : t)); showToast('No se pudo actualizar la tarea', 'error'); }
     } else {
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: markingDone, completed_by: completedBy, completed_at: completedAt } : t));
-      await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
+      const { error } = await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
+      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !markingDone } : t)); showToast('No se pudo actualizar la tarea', 'error'); }
     }
   };
 
@@ -197,7 +200,7 @@ export default function NidoScreen() {
           ))}
 
           {/* Add task button (ob-opt style) */}
-          <TouchableOpacity style={s.addBtn} activeOpacity={0.8}>
+          <TouchableOpacity style={s.addBtn} activeOpacity={0.8} onPress={openFab}>
             <View style={s.addIcon}>
               <Text style={s.addIconText}>+</Text>
             </View>

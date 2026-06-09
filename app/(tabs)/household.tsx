@@ -11,6 +11,22 @@ import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 
+function computeStreak(completedDates: (string | null)[]): number {
+  const daySet = new Set(
+    completedDates.filter(Boolean).map(d => d!.slice(0, 10))
+  );
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (daySet.has(key)) streak++;
+    else break;
+  }
+  return streak;
+}
+
 export default function ProfileScreen() {
   const { profile, household, user, setProfile, signOut } = useAuthStore();
   const { accent } = useNidoStore();
@@ -24,8 +40,38 @@ export default function ProfileScreen() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [stats, setStats] = useState({ tareas: '—', racha: '—', aportacion: '—' });
 
   useEffect(() => { setNameVal(profile?.full_name ?? ''); }, [profile]);
+
+  useEffect(() => {
+    if (!user || !household) return;
+    (async () => {
+      const [{ data: myTasks }, { count: totalDone }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('completed_at')
+          .eq('household_id', household.id)
+          .eq('completed_by', user.id)
+          .eq('is_done', true),
+        supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('household_id', household.id)
+          .eq('is_done', true),
+      ]);
+      const myCount = myTasks?.length ?? 0;
+      const streak = computeStreak((myTasks ?? []).map(t => t.completed_at));
+      const aportacion = (totalDone ?? 0) > 0
+        ? Math.round((myCount / (totalDone ?? 1)) * 100)
+        : 0;
+      setStats({
+        tareas:     String(myCount),
+        racha:      String(streak),
+        aportacion: `${aportacion}%`,
+      });
+    })();
+  }, [user?.id, household?.id]);
 
   const initial = profile?.full_name?.[0]?.toUpperCase() ?? '?';
   const avatarUrl = profile?.avatar_url;
@@ -207,9 +253,9 @@ export default function ProfileScreen() {
         {/* Stats */}
         <View style={s.statsRow}>
           {[
-            { v: '—', k: 'tareas' },
-            { v: '—', k: 'días racha' },
-            { v: '—', k: 'aportación' },
+            { v: stats.tareas,     k: 'tareas' },
+            { v: stats.racha,      k: 'días racha' },
+            { v: stats.aportacion, k: 'aportación' },
           ].map((st) => (
             <View key={st.k} style={s.stat}>
               <Text style={[s.statVal, { color: accent.hex }]}>{st.v}</Text>
