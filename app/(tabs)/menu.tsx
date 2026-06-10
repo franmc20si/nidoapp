@@ -5,11 +5,11 @@ import {
   Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
-import { supabase } from '@/lib/supabase';
+import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
+import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
 
@@ -31,73 +31,14 @@ function mixHex(a: string, b: string, t: number) {
   return toHex(x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t);
 }
 
-// ─── date helpers ──────────────────────────────────────────────────────────
+// ─── date display helpers (el cálculo de week_key vive en @/lib/week) ────────
 const MN_DAYS_LONG  = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const MN_DAYS_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const MN_MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 
-function isoWeekNum(d: Date): number {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = (t.getUTCDay() + 6) % 7;
-  t.setUTCDate(t.getUTCDate() - day + 3);
-  const firstTh = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
-  return 1 + Math.round(((t.getTime() - firstTh.getTime()) / 864e5 - 3 + (firstTh.getUTCDay() + 6) % 7) / 7);
-}
-
-/** ISO week key: "2026-W22" */
-function weekKey(d: Date): string {
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = (t.getUTCDay() + 6) % 7;
-  t.setUTCDate(t.getUTCDate() - day + 3);
-  const year = t.getUTCFullYear();
-  const wn   = isoWeekNum(d);
-  return `${year}-W${String(wn).padStart(2, '0')}`;
-}
-
-function getMondayOfWeek(ref: Date): Date {
-  const mon = new Date(ref);
-  mon.setDate(ref.getDate() - (ref.getDay() + 6) % 7);
-  mon.setHours(0, 0, 0, 0);
-  return mon;
-}
-
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(d.getDate() + n);
-  return r;
-}
-
 function getWeekDays(monday: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
-
-// ─── types & storage ───────────────────────────────────────────────────────
-// Legacy AsyncStorage keys — used only for one-time migration
-const STORAGE_RECIPES        = 'nido_recipes_v2';
-const STORAGE_PLANS          = 'nido_weekly_plans';
-const STORAGE_MIGRATION_DONE = 'nido_menu_migrated_v1';
-
-interface Recipe {
-  id: string;
-  name: string;
-  color: string;
-  meals: ('comida'|'cena')[];
-  ingredients?: Ingredient[];
-}
-type Plan        = Record<string, string>;   // "dayIdx-meal" → recipeId
-type WeeklyPlans = Record<string, Plan>;     // weekKey → Plan
-
-const DISH_COLORS = ['#D97B66','#D9A577','#7FA86A','#79C1F2','#A881F2','#C25A7A','#5BA38C','#C99A3C'];
-
-const DEFAULT_RECIPES: Recipe[] = [
-  { id: 'r1', name: 'Ensalada César',      color: '#7FA86A', meals: ['comida','cena'] },
-  { id: 'r2', name: 'Pasta al pesto',      color: '#5BA38C', meals: ['comida'] },
-  { id: 'r3', name: 'Lentejas estofadas',  color: '#D9A577', meals: ['comida'] },
-  { id: 'r4', name: 'Salmón al horno',     color: '#D97B66', meals: ['cena'] },
-  { id: 'r5', name: 'Crema de verduras',   color: '#A881F2', meals: ['cena'] },
-  { id: 'r6', name: 'Tortilla de patata',  color: '#C99A3C', meals: ['comida','cena'] },
-  { id: 'r7', name: 'Pollo al limón',      color: '#79C1F2', meals: ['cena'] },
-];
 
 // ─── main screen ───────────────────────────────────────────────────────────
 export default function MenuScreen() {
@@ -117,94 +58,19 @@ export default function MenuScreen() {
   const { accent } = useNidoStore();
   const { household } = useAuthStore();
 
-  // Recipes (shared across all weeks)
-  const [recipes, setRecipes] = useState<Recipe[]>(DEFAULT_RECIPES);
-
-  // Per-week plans
-  const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlans>({});
+  // Estado compartido (mismo store que la tab Semana → nunca divergen)
+  const {
+    recipes, weeklyPlans, recipeById,
+    loadMenu, assignPlan,
+    saveRecipe: storeSaveRecipe, deleteRecipe: storeDeleteRecipe,
+  } = useMenuStore();
 
   // Current week's plan (derived)
-  const plan: Plan = weeklyPlans[wKey] ?? {};
+  const plan = weeklyPlans[wKey] ?? {};
 
-  // ── persistence: load from Supabase (with AsyncStorage migration) ──────
-  const loadData = useCallback(async () => {
-    if (!household?.id) return;
-    try {
-      const [{ data: recipeRows }, { data: planRows }, migrationDoneRaw] = await Promise.all([
-        supabase.from('recipes').select('*').eq('household_id', household.id),
-        supabase.from('meal_plans').select('*').eq('household_id', household.id),
-        AsyncStorage.getItem(STORAGE_MIGRATION_DONE),
-      ]);
-
-      const migrationDone = !!migrationDoneRaw;
-
-      // ── Recipes ──────────────────────────────────────────────────────────
-      if (recipeRows && recipeRows.length > 0) {
-        setRecipes(recipeRows.map(r => ({
-          id: r.id, name: r.name, color: r.color,
-          meals: r.meals as Recipe['meals'],
-          ingredients: (r.ingredients ?? []) as Ingredient[],
-        })));
-      } else if (!migrationDone) {
-        const rRaw = await AsyncStorage.getItem(STORAGE_RECIPES);
-        if (rRaw) {
-          const parsed: Recipe[] = JSON.parse(rRaw);
-          if (Array.isArray(parsed) && parsed.length) {
-            await supabase.from('recipes').insert(
-              parsed.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: r.ingredients ?? [], household_id: household.id }))
-            );
-            setRecipes(parsed);
-            await AsyncStorage.removeItem(STORAGE_RECIPES);
-          } else {
-            setRecipes(DEFAULT_RECIPES);
-          }
-        } else {
-          setRecipes(DEFAULT_RECIPES);
-        }
-      } else {
-        setRecipes(DEFAULT_RECIPES);
-      }
-
-      // ── Plans ─────────────────────────────────────────────────────────────
-      if (planRows && planRows.length > 0) {
-        const wp: WeeklyPlans = {};
-        planRows.forEach(row => { wp[row.week_key] = row.plan as Plan; });
-        setWeeklyPlans(wp);
-      } else if (!migrationDone) {
-        const pRaw = await AsyncStorage.getItem(STORAGE_PLANS);
-        if (pRaw) {
-          const parsed: WeeklyPlans = JSON.parse(pRaw);
-          if (parsed && typeof parsed === 'object') {
-            const rows = Object.entries(parsed).map(([week_key, plan]) => ({ household_id: household.id, week_key, plan }));
-            if (rows.length > 0) await supabase.from('meal_plans').insert(rows);
-            setWeeklyPlans(parsed);
-            await AsyncStorage.removeItem(STORAGE_PLANS);
-          }
-        }
-      }
-
-      // Mark migration as done so it never re-runs
-      if (!migrationDone) {
-        await AsyncStorage.setItem(STORAGE_MIGRATION_DONE, '1');
-      }
-    } catch (e: any) {
-      console.error('[menu] load error', e);
-      showToast('No se pudieron cargar los datos del menú', 'error');
-    }
-  }, [household?.id]);
-
-  useEffect(() => { loadData(); }, [household?.id]);
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
-
-  // ── helpers ────────────────────────────────────────────────────────────
-  const recipeById = (id?: string) => id ? recipes.find(r => r.id === id) : undefined;
-
-  const setPlanForWeek = useCallback((updater: (p: Plan) => Plan) => {
-    setWeeklyPlans(wp => ({
-      ...wp,
-      [wKey]: updater(wp[wKey] ?? {}),
-    }));
-  }, [wKey]);
+  // ── persistence: carga compartida desde el store ─────────────────────────
+  useEffect(() => { if (household?.id) loadMenu(household.id); }, [household?.id]);
+  useFocusEffect(useCallback(() => { if (household?.id) loadMenu(household.id); }, [household?.id]));
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
@@ -229,91 +95,24 @@ export default function MenuScreen() {
     return result;
   })();
 
-  const upsertWeekPlan = useCallback(async (wk: string, p: Plan) => {
-    if (!household?.id) return;
-    await supabase.from('meal_plans').upsert(
-      { household_id: household.id, week_key: wk, plan: p, updated_at: new Date().toISOString() },
-      { onConflict: 'household_id,week_key' }
-    );
-  }, [household?.id]);
-
   const assign = (rid: string | null) => {
-    if (!pick) return;
-    const k = `${pick.day}-${pick.meal}`;
-    const newPlan: Plan = { ...(weeklyPlans[wKey] ?? {}) };
-    if (rid) newPlan[k] = rid; else delete newPlan[k];
-    setWeeklyPlans(wp => ({ ...wp, [wKey]: newPlan }));
-    upsertWeekPlan(wKey, newPlan);
+    if (!pick || !household?.id) return;
+    assignPlan(household.id, wKey, `${pick.day}-${pick.meal}`, rid);
     setPick(null);
   };
 
   const saveRecipe = async (data: Recipe) => {
-    const hid = household?.id;
-    const isExisting = !!(data.id && recipes.some(r => r.id === data.id));
-    const newId = isExisting ? data.id : 'rc' + Date.now();
-    const saved: Recipe = { ...data, id: newId };
-
-    // Update local state immediately so UI responds
-    if (isExisting) {
-      setRecipes(rs => rs.map(r => r.id === data.id ? { ...r, ...saved } : r));
-    } else {
-      setRecipes(rs => [...rs, saved]);
-    }
     setEditing(null);
-
-    // Persist to Supabase in background (best-effort)
-    if (!hid) return;
-    try {
-      if (isExisting) {
-        await supabase.from('recipes').update({
-          name: saved.name, color: saved.color, meals: saved.meals, ingredients: saved.ingredients ?? [],
-        }).eq('id', saved.id).eq('household_id', hid);
-
-        const updatedPlans = { ...weeklyPlans };
-        for (const wk in updatedPlans) {
-          const p = { ...updatedPlans[wk] };
-          Object.keys(p).forEach(k => {
-            const meal = k.split('-')[1];
-            if (p[k] === data.id && !saved.meals.includes(meal as any)) delete p[k];
-          });
-          updatedPlans[wk] = p;
-          await upsertWeekPlan(wk, p);
-        }
-        setWeeklyPlans(updatedPlans);
-      } else {
-        await supabase.from('recipes').insert({
-          id: saved.id, name: saved.name, color: saved.color,
-          meals: saved.meals, ingredients: saved.ingredients ?? [],
-          household_id: hid,
-        });
-      }
-    } catch (e: any) {
-      console.error('[menu] saveRecipe error', e);
-      showToast('No se pudo guardar el plato', 'error');
-    }
+    if (!household?.id) return;
+    const { ok } = await storeSaveRecipe(household.id, data);
+    if (!ok) showToast('No se pudo guardar el plato', 'error');
   };
 
   const deleteRecipe = async (id: string) => {
-    // Update local state immediately
-    setRecipes(rs => rs.filter(r => r.id !== id));
-    const updatedPlans = { ...weeklyPlans };
-    for (const wk in updatedPlans) {
-      const p = { ...updatedPlans[wk] };
-      Object.keys(p).forEach(k => { if (p[k] === id) delete p[k]; });
-      updatedPlans[wk] = p;
-    }
-    setWeeklyPlans(updatedPlans);
     setEditing(null);
-
-    // Persist to Supabase in background
     if (!household?.id) return;
-    try {
-      await supabase.from('recipes').delete().eq('id', id).eq('household_id', household.id);
-      for (const wk in updatedPlans) await upsertWeekPlan(wk, updatedPlans[wk]);
-    } catch (e: any) {
-      console.error('[menu] deleteRecipe error', e);
-      showToast('No se pudo eliminar el plato', 'error');
-    }
+    const { ok } = await storeDeleteRecipe(household.id, id);
+    if (!ok) showToast('No se pudo eliminar el plato', 'error');
   };
 
   const dim = C.ink3;

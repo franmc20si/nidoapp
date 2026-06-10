@@ -6,6 +6,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
+import { useMenuStore } from '@/store/menuStore';
+import { weekKey } from '@/lib/week';
 import { supabase } from '@/lib/supabase';
 import { Task } from '@/types';
 import TaskCard from '@/components/TaskCard';
@@ -26,13 +28,6 @@ function mixHex(a: string, b: string, t: number) {
 
 function getMondayOfWeek(ref: Date): Date {
   const m = new Date(ref); m.setDate(ref.getDate()-(ref.getDay()+6)%7); m.setHours(0,0,0,0); return m;
-}
-function isoWeekKey(d: Date): string {
-  const t = new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
-  const day = (t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
-  const yr = t.getUTCFullYear();
-  const wn = 1+Math.round(((t.getTime()-new Date(Date.UTC(yr,0,4)).getTime())/864e5-3+(new Date(Date.UTC(yr,0,4)).getUTCDay()+6)%7)/7);
-  return `${yr}-W${String(wn).padStart(2,'0')}`;
 }
 
 function getGreeting(name: string) {
@@ -74,34 +69,20 @@ export default function HoyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [menuRecipes, setMenuRecipes] = useState<{ id: string; name: string; color: string }[]>([]);
-  const [todayComida, setTodayComida] = useState<string | undefined>();
-  const [todayCena,   setTodayCena]   = useState<string | undefined>();
+
+  // Menú: estado compartido con la tab Menú (mismo store → nunca divergen)
+  const { weeklyPlans, recipeById, loadMenu } = useMenuStore();
+  const todayPlan = weeklyPlans[weekKey(new Date())] ?? {};
+  const todayDow  = (new Date().getDay() + 6) % 7;
+  const todayComida = todayPlan[`${todayDow}-comida`];
+  const todayCena   = todayPlan[`${todayDow}-cena`];
 
   // Load saved accent when household is known
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
 
-  // Load today's menu from Supabase
-  const loadMenu = useCallback(async () => {
-    if (!household?.id) return;
-    try {
-      const wk = isoWeekKey(new Date());
-      const [{ data: recipeRows }, { data: planRows }] = await Promise.all([
-        supabase.from('recipes').select('id, name, color').eq('household_id', household.id),
-        supabase.from('meal_plans').select('plan').eq('household_id', household.id).eq('week_key', wk).maybeSingle(),
-      ]);
-      setMenuRecipes(recipeRows ?? []);
-      if (planRows?.plan) {
-        const plan = planRows.plan as Record<string, string>;
-        const dow = (new Date().getDay() + 6) % 7;
-        setTodayComida(plan[`${dow}-comida`]);
-        setTodayCena(plan[`${dow}-cena`]);
-      }
-    } catch {}
-  }, [household?.id]);
-
-  useEffect(() => { loadMenu(); }, [household?.id]);
-  useFocusEffect(useCallback(() => { loadMenu(); }, [loadMenu]));
+  // Carga del menú a través del store compartido
+  useEffect(() => { if (household?.id) loadMenu(household.id); }, [household?.id]);
+  useFocusEffect(useCallback(() => { if (household?.id) loadMenu(household.id); }, [household?.id]));
 
   // Set browser theme-color meta tag on web
   useEffect(() => {
@@ -294,8 +275,8 @@ export default function HoyScreen() {
 
         {/* Today's menu */}
         {(todayComida || todayCena) && (() => {
-          const comida = menuRecipes.find(r => r.id === todayComida);
-          const cena   = menuRecipes.find(r => r.id === todayCena);
+          const comida = recipeById(todayComida);
+          const cena   = recipeById(todayCena);
           return (
             <View style={n.menuCard}>
               <Text style={n.menuLabel}>MENÚ DE HOY</Text>
