@@ -13,6 +13,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const { setSession, setProfile, setHousehold, session, isLoading } = useAuthStore();
+  const homeReady = useAuthStore((s) => s.homeReady);
 
   useEffect(() => {
     // Start font loading in background — don't block auth listener
@@ -27,8 +28,11 @@ export default function RootLayout() {
           const { route, household } = await resolveDestination(session.user.id);
           if (household) setHousehold(household);
           await fontPromise;
-          SplashScreen.hideAsync();
           router.replace(route);
+          // Si vamos a las tabs, mantenemos el splash hasta que la pantalla
+          // inicial cargue sus datos (efecto homeReady abajo). En cualquier otra
+          // ruta (p. ej. onboarding) lo ocultamos ya, no hay datos pesados.
+          if (route !== '/(tabs)') SplashScreen.hideAsync().catch(() => {});
         } else if (!session) {
           // Don't navigate if the callback page is handling OAuth tokens
           if (typeof window !== 'undefined') {
@@ -37,13 +41,24 @@ export default function RootLayout() {
             if (hash.includes('access_token') || path === '/auth-callback') return;
           }
           await fontPromise;
-          SplashScreen.hideAsync();
+          SplashScreen.hideAsync().catch(() => {});
           router.replace('/(auth)/login');
         }
       }
     );
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // Oculta el splash cuando la pantalla inicial ya tiene datos
+  useEffect(() => {
+    if (homeReady) SplashScreen.hideAsync().catch(() => {});
+  }, [homeReady]);
+
+  // Red de seguridad: nunca dejar el splash más de 5s, pase lo que pase
+  useEffect(() => {
+    const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 5000);
+    return () => clearTimeout(t);
   }, []);
 
   return (

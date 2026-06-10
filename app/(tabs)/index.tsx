@@ -59,7 +59,7 @@ function getWeekDays() {
 }
 
 export default function HoyScreen() {
-  const { profile, household, user } = useAuthStore();
+  const { profile, household, user, setHomeReady } = useAuthStore();
   const { accent, loadAccent } = useNidoStore();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -119,6 +119,8 @@ export default function HoyScreen() {
 
     setTasks(tasks);
     setRemoved(new Set());
+    // Datos iniciales listos → permite ocultar el splash (sin parpadeo vacío)
+    setHomeReady(true);
   };
 
   useEffect(() => { fetchTasks(); }, [household]);
