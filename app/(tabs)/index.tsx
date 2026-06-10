@@ -61,6 +61,7 @@ function getWeekDays() {
 export default function HoyScreen() {
   const { profile, household, user, setHomeReady } = useAuthStore();
   const { accent, loadAccent } = useNidoStore();
+  const taskRev = useNidoStore((s) => s.taskRev);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<'pendiente' | 'hecho'>('pendiente');
@@ -113,8 +114,8 @@ export default function HoyScreen() {
     );
     if (toReset.length > 0) {
       const ids = toReset.map(t => t.id);
-      await supabase.from('tasks').update({ is_done: false, due_date: null }).in('id', ids);
-      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; });
+      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids);
+      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
     }
 
     setTasks(tasks);
@@ -123,7 +124,7 @@ export default function HoyScreen() {
     setHomeReady(true);
   };
 
-  useEffect(() => { fetchTasks(); }, [household]);
+  useEffect(() => { fetchTasks(); }, [household, taskRev]);
   useFocusEffect(useCallback(() => { fetchTasks(); }, [household]));
 
   const fetchProfiles = useCallback(async () => {

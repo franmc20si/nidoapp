@@ -81,6 +81,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
     } as any);
     setSaving(false);
     if (error) { setSaveError(error.message); return; }
+    useNidoStore.getState().bumpTasks(); // avisa a Semana/Nido para que refetcheen
     reset();
     onClose();
   };

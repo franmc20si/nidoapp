@@ -44,8 +44,10 @@ interface NidoState {
   accentKey: string;
   accent: NidoColor;
   fabOpen: boolean;
+  taskRev: number; // se incrementa en cada mutación de tareas → las pantallas refetchean
   openFab: () => void;
   closeFab: () => void;
+  bumpTasks: () => void;
   loadAccent: (householdId: string) => Promise<void>;
   setAccent: (householdId: string, key: string) => Promise<void>;
 }
@@ -54,8 +56,10 @@ export const useNidoStore = create<NidoState>((set) => ({
   accentKey: DEFAULT_COLOR.key,
   accent: DEFAULT_COLOR,
   fabOpen: false,
+  taskRev: 0,
   openFab: () => set({ fabOpen: true }),
   closeFab: () => set({ fabOpen: false }),
+  bumpTasks: () => set((s) => ({ taskRev: s.taskRev + 1 })),
 
   loadAccent: async (householdId) => {
     // Aplica caché local de inmediato para evitar parpadeo

@@ -10,6 +10,7 @@ import { CATS } from '@/constants/categories';
 import TaskCard from '@/components/TaskCard';
 import { AlertCards } from '@/components/AlertSystem';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+import { getMondayOfWeek } from '@/lib/week';
 import { IlluNidoLimpio, getCatIcon } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 import TaskEditSheet from '@/components/TaskEditSheet';
@@ -18,6 +19,7 @@ import { showToast } from '@/store/toastStore';
 export default function NidoScreen() {
   const { household, user } = useAuthStore();
   const { accent, openFab } = useNidoStore();
+  const taskRev = useNidoStore((s) => s.taskRev);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export default function NidoScreen() {
     setTasks(tasks);
   };
 
-  useEffect(() => { fetchTasks(); fetchProfiles(); }, [household?.id]);
+  useEffect(() => { fetchTasks(); fetchProfiles(); }, [household?.id, taskRev]);
   useFocusEffect(useCallback(() => { fetchTasks(); fetchProfiles(); }, [household?.id]));
 
   const toggleTask = async (task: Task) => {
@@ -98,8 +100,10 @@ export default function NidoScreen() {
 
   const total = tasks.length;
   const doneCount = tasks.filter((t) => t.is_done).length;
+  // "pts / semana": solo tareas completadas dentro de la semana ISO actual
+  const weekStart = getMondayOfWeek(new Date());
   const ptsWeek = tasks
-    .filter((t) => t.is_done)
+    .filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
     .reduce((sum, t) => sum + (t.points ?? 10), 0);
 
   return (

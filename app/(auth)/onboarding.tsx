@@ -67,12 +67,13 @@ export default function OnboardingScreen() {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
 
-      const { data, error } = await supabase
-        .from('households').select().eq('invite_code', code).single();
+      // RPC SECURITY DEFINER: valida el código y añade al miembro de forma atómica.
+      // Necesario porque la política RLS de households impide a un no-miembro leer
+      // el hogar por invite_code (si no, el join sería siempre "código no encontrado").
+      const { data, error } = await supabase.rpc('join_household_by_code', { p_code: code });
       if (error || !data) { showError('Código no encontrado. Comprueba e inténtalo de nuevo'); return; }
 
-      await supabase.from('household_members').insert({ household_id: data.id, user_id: currentUser.id, role: 'member' });
-      setHousehold(data);
+      setHousehold(data as any);
       setLoading(false);
       router.replace('/(tabs)');
     } catch (e: any) {

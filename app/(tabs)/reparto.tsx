@@ -66,7 +66,7 @@ export default function RepartoScreen() {
         tasks: userTasks.length,
       };
     });
-    built.sort((a) => (a.id === user?.id ? -1 : 1));
+    built.sort((a, b) => (a.id === user?.id ? -1 : 0) - (b.id === user?.id ? -1 : 0));
     setMembers(built);
   };
 
