@@ -1,7 +1,25 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+
+// Adaptador único: en web usa localStorage (síncrono), en nativo AsyncStorage
+// (asíncrono). Conforma StateStorage explícitamente para que ambos ramales
+// tengan firmas compatibles (evita unir Storage | AsyncStorageStatic).
+const crossStorage: StateStorage = {
+  getItem: (name) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') return localStorage.getItem(name);
+    return AsyncStorage.getItem(name);
+  },
+  setItem: (name, value) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') { localStorage.setItem(name, value); return; }
+    return AsyncStorage.setItem(name, value);
+  },
+  removeItem: (name) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') { localStorage.removeItem(name); return; }
+    return AsyncStorage.removeItem(name);
+  },
+};
 
 export interface Alert {
   id: string;
@@ -35,11 +53,7 @@ export const useAlertStore = create<AlertState>()(
     }),
     {
       name: 'nido-alerts',
-      storage: createJSONStorage(() =>
-        Platform.OS === 'web'
-          ? (typeof window !== 'undefined' ? localStorage : AsyncStorage)
-          : AsyncStorage
-      ),
+      storage: createJSONStorage(() => crossStorage),
     }
   )
 );

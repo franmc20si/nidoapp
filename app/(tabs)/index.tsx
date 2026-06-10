@@ -186,7 +186,7 @@ export default function HoyScreen() {
 
   return (
     <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
-      <StatusBar style="light" backgroundColor={accent.hex} />
+      <StatusBar style="light" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
