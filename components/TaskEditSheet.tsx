@@ -19,6 +19,16 @@ const TIMES = [
   { label: '2 h',    min: 120 },
 ];
 
+// Evita que una petición colgada deje el botón girando para siempre.
+// supabase-js no lleva timeout propio; sin esto, un fetch o un lock de auth
+// bloqueado en web haría que el await no se resuelva nunca.
+function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
+  ]);
+}
+
 interface Props {
   task: Task | null;
   visible: boolean;
@@ -64,12 +74,22 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
       is_recurring: isRec,
       recurrence_rule: isRec ? recRule : null,
     };
-    const { data, error: err } = await supabase
-      .from('tasks').update(patch).eq('id', task.id).select().single();
-    setSaving(false);
-    if (err) { setError(err.message); return; }
-    onSaved({ ...task, ...patch, ...data });
-    onClose();
+    try {
+      // Sin .select().single(): no necesitamos releer la fila (ya tenemos patch)
+      // y así evitamos el error PGRST116 si el SELECT post-update devuelve 0 filas.
+      const { error: err } = await withTimeout(
+        supabase.from('tasks').update(patch).eq('id', task.id)
+      );
+      if (err) throw err;
+      onSaved({ ...task, ...patch });
+      onClose();
+    } catch (e: any) {
+      setError(e?.message === 'TIMEOUT'
+        ? 'La conexión tardó demasiado. Revisa tu red e inténtalo de nuevo.'
+        : (e?.message ?? 'No se pudo guardar la tarea'));
+    } finally {
+      setSaving(false); // garantiza que el botón nunca se quede colgado
+    }
   };
 
   const handleDelete = () => {
@@ -80,10 +100,21 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
         onPress: async () => {
           if (!task) return;
           setDeleting(true);
-          await supabase.from('tasks').delete().eq('id', task.id);
-          setDeleting(false);
-          onDeleted(task.id);
-          onClose();
+          setError('');
+          try {
+            const { error: err } = await withTimeout(
+              supabase.from('tasks').delete().eq('id', task.id)
+            );
+            if (err) throw err;
+            onDeleted(task.id);
+            onClose();
+          } catch (e: any) {
+            setError(e?.message === 'TIMEOUT'
+              ? 'La conexión tardó demasiado. Inténtalo de nuevo.'
+              : (e?.message ?? 'No se pudo eliminar la tarea'));
+          } finally {
+            setDeleting(false);
+          }
         },
       },
     ]);
