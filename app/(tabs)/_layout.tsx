@@ -216,7 +216,7 @@ function CustomTabBar({ state, navigation }: any) {
     { name: 'index',   label: 'Semana',  Icon: IconHome },
     { name: 'nido',    label: 'Nido',    Icon: IconNest },
     { name: '__fab',   label: '',        Icon: null },
-    { name: 'reparto', label: 'Reparto', Icon: IconChart },
+    { name: 'servicios', label: 'Servicios', Icon: IconChart },
     { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
   ];
 
@@ -262,7 +262,8 @@ export default function TabsLayout() {
       <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="index" />
         <Tabs.Screen name="nido" />
-        <Tabs.Screen name="reparto" />
+        <Tabs.Screen name="servicios" />
+        <Tabs.Screen name="reparto" options={{ href: null }} />
         <Tabs.Screen name="menu" />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>

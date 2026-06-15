@@ -167,8 +167,12 @@ export default function MenuScreen() {
 
           {days.map((d, i) => {
             const isToday      = isThisWeek && i === todayDow;
-            const comidaRecipe = recipeById(plan[`${i}-comida`]);
-            const cenaRecipe   = recipeById(plan[`${i}-cena`]);
+            const comidaVal    = plan[`${i}-comida`];
+            const cenaVal      = plan[`${i}-cena`];
+            const comidaRecipe = recipeById(comidaVal);
+            const cenaRecipe   = recipeById(cenaVal);
+            const comidaEvent  = !comidaRecipe && comidaVal?.startsWith('event:') ? comidaVal.slice(6) : null;
+            const cenaEvent    = !cenaRecipe && cenaVal?.startsWith('event:') ? cenaVal.slice(6) : null;
             return (
               <View key={i} style={s.dayRow}>
                 {/* day label */}
@@ -183,14 +187,18 @@ export default function MenuScreen() {
                     s.cell,
                     comidaRecipe
                       ? { backgroundColor: mixHex(C.paper, comidaRecipe.color, 0.28), borderColor: mixHex(C.paper, comidaRecipe.color, 0.42), borderStyle: 'solid' }
-                      : { borderStyle: 'dashed' },
+                      : comidaEvent
+                        ? { backgroundColor: C.white, borderColor: C.line, borderStyle: 'solid' }
+                        : { borderStyle: 'dashed' },
                   ]}
                   onPress={() => setPick({ day: i, meal: 'comida' })}
                   activeOpacity={0.75}
                 >
                   {comidaRecipe
                     ? <Text style={[s.dishName, { color: mixHex(comidaRecipe.color, '#241E18', 0.55) }]}>{comidaRecipe.name}</Text>
-                    : <Text style={s.cellPlus}>+</Text>}
+                    : comidaEvent
+                      ? <Text style={s.eventCellName}>{comidaEvent}</Text>
+                      : <Text style={s.cellPlus}>+</Text>}
                 </TouchableOpacity>
 
                 {/* cena */}
@@ -199,14 +207,18 @@ export default function MenuScreen() {
                     s.cell,
                     cenaRecipe
                       ? { backgroundColor: mixHex(C.paper, cenaRecipe.color, 0.28), borderColor: mixHex(C.paper, cenaRecipe.color, 0.42), borderStyle: 'solid' }
-                      : { borderStyle: 'dashed' },
+                      : cenaEvent
+                        ? { backgroundColor: C.white, borderColor: C.line, borderStyle: 'solid' }
+                        : { borderStyle: 'dashed' },
                   ]}
                   onPress={() => setPick({ day: i, meal: 'cena' })}
                   activeOpacity={0.75}
                 >
                   {cenaRecipe
                     ? <Text style={[s.dishName, { color: mixHex(cenaRecipe.color, '#241E18', 0.55) }]}>{cenaRecipe.name}</Text>
-                    : <Text style={s.cellPlus}>+</Text>}
+                    : cenaEvent
+                      ? <Text style={s.eventCellName}>{cenaEvent}</Text>
+                      : <Text style={s.cellPlus}>+</Text>}
                 </TouchableOpacity>
               </View>
             );
@@ -281,6 +293,16 @@ function PickSheet({ day, meal, recipes, current, onPick, onClose, onNewRecipe }
   current?: string; onPick: (id: string|null) => void;
   onClose: () => void; onNewRecipe: () => void;
 }) {
+  const currentEventName = current?.startsWith('event:') ? current.slice(6) : '';
+  const [eventText, setEventText] = useState(currentEventName);
+  const isEventActive = !!currentEventName;
+
+  const submitEvent = () => {
+    const name = eventText.trim();
+    if (!name) return;
+    onPick('event:' + name);
+  };
+
   return (
     <Modal visible transparent animationType="slide">
       <TouchableOpacity style={sh.scrim} activeOpacity={1} onPress={onClose} />
@@ -304,14 +326,36 @@ function PickSheet({ day, meal, recipes, current, onPick, onClose, onNewRecipe }
             {recipes.map(r => (
               <TouchableOpacity
                 key={r.id}
-                style={[sh.recipeRow, current === r.id && { borderColor: C.brand, backgroundColor: C.brandWash }]}
+                style={[sh.recipeRow, !isEventActive && current === r.id && { borderColor: C.brand, backgroundColor: C.brandWash }]}
                 onPress={() => onPick(r.id)}
               >
                 <View style={[sh.rdot, { backgroundColor: r.color }]} />
                 <Text style={sh.rname}>{r.name}</Text>
-                {current === r.id && <Text style={{ color: C.brand, fontWeight: '700' }}>✓</Text>}
+                {!isEventActive && current === r.id && <Text style={{ color: C.brand, fontWeight: '700' }}>✓</Text>}
               </TouchableOpacity>
             ))}
+
+            <View style={sh.sectionDivider} />
+            <Text style={sh.sectionTitle}>Añade un evento</Text>
+            <View style={[sh.eventRow, isEventActive && { borderColor: C.brand, backgroundColor: C.brandWash }]}>
+              <TextInput
+                style={sh.eventInput}
+                value={eventText}
+                onChangeText={setEventText}
+                placeholder="Ej: Cumpleaños, Restaurante…"
+                placeholderTextColor={C.ink3}
+                returnKeyType="done"
+                onSubmitEditing={submitEvent}
+              />
+              <TouchableOpacity
+                style={[sh.eventBtn, !eventText.trim() && { opacity: 0.35 }]}
+                onPress={submitEvent}
+                disabled={!eventText.trim()}
+                activeOpacity={0.8}
+              >
+                <Text style={sh.eventBtnText}>Añadir</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
 
           <View style={[sh.row, { marginTop: 18, gap: 10 }]}>
@@ -617,7 +661,8 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.line, backgroundColor: C.paperSoft,
     alignItems: 'center', justifyContent: 'center',
   },
-  dishName: { fontSize: 12, fontWeight: '600', lineHeight: 15, letterSpacing: -0.2, textAlign: 'center', fontFamily: FONT },
+  dishName:      { fontSize: 12, fontWeight: '600', lineHeight: 15, letterSpacing: -0.2, textAlign: 'center', fontFamily: FONT },
+  eventCellName: { fontSize: 12, fontWeight: '600', lineHeight: 15, letterSpacing: -0.2, textAlign: 'center', fontFamily: FONT, color: C.ink },
   cellPlus: { color: C.ink3, fontSize: 18, lineHeight: 20 },
 
   bottomBtns: { marginTop: 18, gap: 10 },
@@ -658,6 +703,13 @@ const sh = StyleSheet.create({
   linkBtn:      { fontSize: 14, fontWeight: '600', fontFamily: FONT },
   ghostBtn:     { borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center' },
   ghostBtnText: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT },
+
+  sectionDivider: { height: 1, backgroundColor: C.line, marginVertical: 20 },
+  sectionTitle:   { fontSize: 16, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, marginBottom: 12 },
+  eventRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 13, borderRadius: R.m, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, marginBottom: 7 },
+  eventInput: { flex: 1, fontSize: 15, color: C.ink, fontFamily: FONT },
+  eventBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.ink },
+  eventBtnText: { color: C.white, fontWeight: '600', fontSize: 13, fontFamily: FONT },
 
   label: { fontSize: 12, fontWeight: '600', color: C.ink2, fontFamily: FONT, marginBottom: 8, marginTop: 18, textTransform: 'uppercase', letterSpacing: 0.6 },
   field: {

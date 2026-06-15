@@ -70,3 +70,16 @@ export interface Expense {
   date: string;
   created_at: string;
 }
+
+export interface Subscription {
+  id: string;
+  household_id: string;
+  name: string;
+  category: string | null;
+  amount: number;
+  cycle: string;            // monthly | bimonthly | quarterly | semiannual | yearly
+  next_payment: string | null;
+  bank_account: string | null;
+  created_by: string | null;
+  created_at: string;
+}

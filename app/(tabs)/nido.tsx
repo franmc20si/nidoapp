@@ -6,12 +6,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { Task } from '@/types';
 import { C, R, FONT } from '@/constants/theme';
-import { CATS } from '@/constants/categories';
 import TaskCard from '@/components/TaskCard';
 import { AlertCards } from '@/components/AlertSystem';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
-import { IlluNidoLimpio, getCatIcon } from '@/components/icons';
+import { IlluNidoLimpio } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 import TaskEditSheet from '@/components/TaskEditSheet';
 import { showToast } from '@/store/toastStore';
@@ -22,7 +21,6 @@ export default function NidoScreen() {
   const taskRev = useNidoStore((s) => s.taskRev);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'pendiente' | 'realizada' | 'todas'>('pendiente');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -93,10 +91,9 @@ export default function NidoScreen() {
     }
   };
 
-  const byStatus = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
-                 : statusFilter === 'realizada'  ? tasks.filter(t => t.is_done)
-                 : tasks;
-  const shown = selected ? byStatus.filter((t) => t.category === selected) : byStatus;
+  const shown = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
+              : statusFilter === 'realizada'  ? tasks.filter(t => t.is_done)
+              : tasks;
 
   const total = tasks.length;
   const doneCount = tasks.filter((t) => t.is_done).length;
@@ -105,6 +102,32 @@ export default function NidoScreen() {
   const ptsWeek = tasks
     .filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
     .reduce((sum, t) => sum + (t.points ?? 10), 0);
+
+  // Reparto: % de tareas hechas por cada persona
+  const SHARE_PALETTE = [accent.hex, '#5B97C4', '#6FA368', '#C98A3C', '#8E6FCF'];
+  const buildShare = (list: Task[]) => {
+    const byPerson = list.reduce<Record<string, number>>((acc, t) => {
+      if (t.is_done && t.completed_by) acc[t.completed_by] = (acc[t.completed_by] ?? 0) + 1;
+      return acc;
+    }, {});
+    const sum = Object.values(byPerson).reduce((a, b) => a + b, 0);
+    const ids = Object.keys(byPerson).sort((a, b) =>
+      a === user?.id ? -1 : b === user?.id ? 1 : byPerson[b] - byPerson[a]
+    );
+    const people = ids.map((id, i) => ({
+      id,
+      count: byPerson[id],
+      name: id === user?.id ? (profiles[id] ?? 'Tú') : (profiles[id] ?? 'Alguien'),
+      pct: sum ? Math.round((byPerson[id] / sum) * 100) : 0,
+      color: SHARE_PALETTE[i % SHARE_PALETTE.length],
+    }));
+    return { people, total: sum };
+  };
+
+  const weekShare = buildShare(
+    tasks.filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
+  );
+  const allShare = buildShare(tasks);
 
   return (
     <SafeAreaView style={s.root}>
@@ -130,6 +153,38 @@ export default function NidoScreen() {
           <TouchableOpacity style={s.iconBtn} activeOpacity={0.7}>
             <Text style={s.iconBtnText}>⚙</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Share meter card — esta semana */}
+        <View style={s.meterCard}>
+          <Text style={s.meterTitle}>Reparto · esta semana</Text>
+          {weekShare.total === 0 ? (
+            <Text style={s.meterEmpty}>Aún no hay tareas repartidas</Text>
+          ) : (
+            <View style={s.meterBar}>
+              {weekShare.people.map((p) => (
+                <View key={p.id} style={[s.meterSeg, { flex: p.count, backgroundColor: p.color }]}>
+                  <Text style={s.meterSegText} numberOfLines={1}>{p.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Share meter card — histórico (más pequeño) */}
+        <View style={s.meterCardMini}>
+          <Text style={s.meterTitleMini}>Histórico</Text>
+          {allShare.total === 0 ? (
+            <Text style={s.meterEmptyMini}>Sin datos todavía</Text>
+          ) : (
+            <View style={s.meterBarMini}>
+              {allShare.people.map((p) => (
+                <View key={p.id} style={[s.meterSeg, { flex: p.count, backgroundColor: p.color }]}>
+                  <Text style={s.meterSegTextMini} numberOfLines={1}>{p.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Stats card */}
@@ -164,28 +219,6 @@ export default function NidoScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Category chips — wrap grid, no horizontal scroll */}
-        <View style={s.chipsRow}>
-          <TouchableOpacity style={[s.chip, !selected && { backgroundColor: accent.hex, borderColor: accent.hex }]} onPress={() => setSelected(null)} activeOpacity={0.8}>
-            <Text style={[s.chipText, !selected && { color: C.white }]}>Todas</Text>
-          </TouchableOpacity>
-          {CATS.map((cat) => {
-            const on = selected === cat.key;
-            const CatIcon = getCatIcon(cat.key);
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[s.chip, on && { backgroundColor: cat.color, borderColor: cat.color }]}
-                onPress={() => setSelected(on ? null : cat.key)}
-                activeOpacity={0.8}
-              >
-                <CatIcon size={15} color={on ? C.white : cat.color} fill={on ? cat.color : cat.tint} strokeWidth={2.2} />
-                <Text style={[s.chipText, on && { color: C.white }]}>{cat.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
         </View>
 
         {/* Alert cards — shared with Hoy */}
@@ -241,21 +274,28 @@ const s = StyleSheet.create({
   iconBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   iconBtnText: { fontSize: 18, color: C.ink2 },
 
-  statsCard: { flexDirection: 'row', marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, paddingVertical: 18, borderWidth: 1, borderColor: C.line, marginBottom: 16 },
+  statsCard: { flexDirection: 'row', alignItems: 'center', height: 92, marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line, marginBottom: 16 },
   statCol: { flex: 1, alignItems: 'center' },
-  statDiv: { width: 1, backgroundColor: C.line, marginVertical: 2 },
+  statDiv: { width: 1, height: 36, backgroundColor: C.line },
   statNum: { fontSize: 24, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.5 },
   statLabel: { fontSize: 11, color: C.ink3, fontFamily: FONT, marginTop: 3 },
+
+  meterCard: { height: 92, marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line, marginBottom: 8, paddingHorizontal: 18, justifyContent: 'center', gap: 10 },
+  meterTitle: { fontSize: 11, letterSpacing: 0.4, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
+  meterEmpty: { fontSize: 13, color: C.ink3, fontFamily: FONT },
+  meterBar: { flexDirection: 'row', height: 38, borderRadius: R.s, overflow: 'hidden', backgroundColor: C.paperDeep, gap: 2 },
+  meterSeg: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, minWidth: 0 },
+  meterSegText: { fontSize: 12, fontWeight: '600', color: C.white, fontFamily: FONT },
+
+  meterCardMini: { marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.m, borderWidth: 1, borderColor: C.line, marginBottom: 16, paddingHorizontal: 16, paddingVertical: 10, gap: 6 },
+  meterTitleMini: { fontSize: 10, letterSpacing: 0.4, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
+  meterEmptyMini: { fontSize: 12, color: C.ink3, fontFamily: FONT },
+  meterBarMini: { flexDirection: 'row', height: 22, borderRadius: R.s, overflow: 'hidden', backgroundColor: C.paperDeep, gap: 2 },
+  meterSegTextMini: { fontSize: 11, fontWeight: '600', color: C.white, fontFamily: FONT },
 
   statusRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
   statusPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
   statusText: { fontSize: 13, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-
-  chipsRow: { paddingHorizontal: 20, paddingBottom: 14, gap: 8, flexDirection: 'row', flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: C.card },
-  chipOn: { backgroundColor: C.ink, borderColor: C.ink },
-  chipText: { fontSize: 13, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-  chipTextOn: { color: C.white },
 
   list: { paddingHorizontal: 20, marginTop: 2 },
   empty: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },

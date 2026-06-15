@@ -13,6 +13,16 @@ import { IlluNidoLimpio } from '@/components/icons';
 
 type Step = 'choose' | 'create' | 'join';
 
+// supabase-js no lleva timeout propio; sin esto, un fetch o un lock de auth
+// bloqueado en web (frecuente justo tras el callback de Google) haría que el
+// await no se resuelva nunca y el botón se quede girando para siempre.
+function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
+  ]);
+}
+
 export default function OnboardingScreen() {
   const { user, setHousehold } = useAuthStore();
   const [step, setStep]                 = useState<Step>('choose');
@@ -31,21 +41,23 @@ export default function OnboardingScreen() {
   const createHousehold = async () => {
     setErrorMsg('');
     if (!householdName.trim()) { showError('Escribe un nombre para tu nido'); return; }
+    if (!user) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
     setLoading(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
-
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const { data, error } = await supabase
-        .from('households')
-        .insert({ name: householdName.trim(), invite_code: code, created_by: currentUser.id })
-        .select().single();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('households')
+          .insert({ name: householdName.trim(), invite_code: code, created_by: user.id })
+          .select().single()
+      );
       if (error || !data) { showError(error?.message ?? 'No se pudo crear el nido'); return; }
 
-      const { error: memberError } = await supabase
-        .from('household_members')
-        .insert({ household_id: data.id, user_id: currentUser.id, role: 'admin' });
+      const { error: memberError } = await withTimeout(
+        supabase
+          .from('household_members')
+          .insert({ household_id: data.id, user_id: user.id, role: 'admin' })
+      );
       if (memberError) { showError(memberError.message); return; }
 
       setCreatedCode(code);
@@ -53,7 +65,9 @@ export default function OnboardingScreen() {
       setLoading(false);
       router.replace('/(tabs)');
     } catch (e: any) {
-      showError(e?.message ?? String(e));
+      showError(e?.message === 'TIMEOUT'
+        ? 'La conexión tardó demasiado. Revisa tu red e inténtalo de nuevo.'
+        : (e?.message ?? String(e)));
     }
   };
 
@@ -62,22 +76,27 @@ export default function OnboardingScreen() {
     setErrorMsg('');
     const code = inviteCode.trim().toUpperCase();
     if (code.length < 4) { showError('Introduce el código de invitación completo'); return; }
+    // Usamos el user del store (ya cargado tras el login): evitamos getUser(), que
+    // adquiere el lock de auth y puede colgarse en web justo después del OAuth.
+    if (!user) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
     setLoading(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) { showError('Sesión no encontrada. Vuelve a entrar.'); return; }
-
       // RPC SECURITY DEFINER: valida el código y añade al miembro de forma atómica.
       // Necesario porque la política RLS de households impide a un no-miembro leer
       // el hogar por invite_code (si no, el join sería siempre "código no encontrado").
-      const { data, error } = await supabase.rpc('join_household_by_code', { p_code: code });
+      // El servidor identifica al usuario con auth.uid() del JWT, no hace falta getUser().
+      const { data, error } = await withTimeout(
+        supabase.rpc('join_household_by_code', { p_code: code })
+      );
       if (error || !data) { showError('Código no encontrado. Comprueba e inténtalo de nuevo'); return; }
 
       setHousehold(data as any);
       setLoading(false);
       router.replace('/(tabs)');
     } catch (e: any) {
-      showError(e?.message ?? String(e));
+      showError(e?.message === 'TIMEOUT'
+        ? 'La conexión tardó demasiado. Revisa tu red e inténtalo de nuevo.'
+        : (e?.message ?? String(e)));
     }
   };
 

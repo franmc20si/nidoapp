@@ -92,31 +92,38 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
     }
   };
 
+  const doDelete = async () => {
+    if (!task) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const { error: err } = await withTimeout(
+        supabase.from('tasks').delete().eq('id', task.id)
+      );
+      if (err) throw err;
+      onDeleted(task.id);
+      onClose();
+    } catch (e: any) {
+      setError(e?.message === 'TIMEOUT'
+        ? 'La conexión tardó demasiado. Inténtalo de nuevo.'
+        : (e?.message ?? 'No se pudo eliminar la tarea'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleDelete = () => {
+    // RN Web no soporta los botones de Alert.alert (el onPress nunca dispara),
+    // así que en web usamos el confirm nativo del navegador.
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined' || window.confirm('¿Seguro que quieres eliminar esta tarea?')) {
+        doDelete();
+      }
+      return;
+    }
     Alert.alert('Eliminar tarea', '¿Seguro que quieres eliminar esta tarea?', [
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar', style: 'destructive',
-        onPress: async () => {
-          if (!task) return;
-          setDeleting(true);
-          setError('');
-          try {
-            const { error: err } = await withTimeout(
-              supabase.from('tasks').delete().eq('id', task.id)
-            );
-            if (err) throw err;
-            onDeleted(task.id);
-            onClose();
-          } catch (e: any) {
-            setError(e?.message === 'TIMEOUT'
-              ? 'La conexión tardó demasiado. Inténtalo de nuevo.'
-              : (e?.message ?? 'No se pudo eliminar la tarea'));
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
+      { text: 'Eliminar', style: 'destructive', onPress: doDelete },
     ]);
   };
 

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Ingredient } from '@/components/ShoppingListSheet';
+import { showToast } from '@/store/toastStore';
 
 // ─── tipos compartidos ───────────────────────────────────────────────────────
 export interface Recipe {
@@ -48,10 +49,11 @@ interface MenuState {
 }
 
 async function upsertWeekPlan(householdId: string, weekKey: string, plan: Plan) {
-  await supabase.from('meal_plans').upsert(
+  const { error } = await supabase.from('meal_plans').upsert(
     { household_id: householdId, week_key: weekKey, plan, updated_at: new Date().toISOString() },
     { onConflict: 'household_id,week_key' }
   );
+  if (error) throw error;
 }
 
 export const useMenuStore = create<MenuState>((set, get) => ({
@@ -230,10 +232,16 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     const newPlan: Plan = { ...current };
     if (recipeId) newPlan[slot] = recipeId; else delete newPlan[slot];
     set({ weeklyPlans: { ...get().weeklyPlans, [weekKey]: newPlan } });
+    // Bloquear loadMenu mientras el upsert está en vuelo, para que un useFocusEffect
+    // no sobreescriba el estado local con datos obsoletos de Supabase.
+    set({ loadingFor: householdId });
     try {
       await upsertWeekPlan(householdId, weekKey, newPlan);
-    } catch (e) {
+    } catch (e: any) {
       console.error('[menuStore] assignPlan error', e);
+      showToast('No se pudo guardar el menú: ' + (e?.message ?? 'error desconocido'), 'error');
+    } finally {
+      set({ loadingFor: null });
     }
   },
 }));
