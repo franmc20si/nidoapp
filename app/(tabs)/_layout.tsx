@@ -11,6 +11,13 @@ import { RECURRENCE_OPTS, RecurrenceRule } from '@/lib/recurrence';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
+
+function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
+  ]);
+}
 import {
   IconHome as IcoHome, IconNest as IcoNest,
   IconChart as IcoChart, IconMenu as IcoMenu,
@@ -69,21 +76,30 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
     if (!title.trim() || !household) return;
     setSaving(true);
     setSaveError('');
-    const { error } = await supabase.from('tasks').insert({
-      household_id: household.id,
-      title: title.trim(),
-      created_by: user?.id,
-      is_recurring: kind === 'regular',
-      recurrence_rule: kind === 'regular' ? recRule : null,
-      category,
-      points: pts,
-      duration_min: min,
-    } as any);
-    setSaving(false);
-    if (error) { setSaveError(error.message); return; }
-    useNidoStore.getState().bumpTasks(); // avisa a Semana/Nido para que refetcheen
-    reset();
-    onClose();
+    try {
+      const { error } = await withTimeout(
+        supabase.from('tasks').insert({
+          household_id: household.id,
+          title: title.trim(),
+          created_by: user?.id,
+          is_recurring: kind === 'regular',
+          recurrence_rule: kind === 'regular' ? recRule : null,
+          category,
+          points: pts,
+          duration_min: min,
+        } as any)
+      );
+      if (error) { setSaveError(error.message); return; }
+      useNidoStore.getState().bumpTasks();
+      reset();
+      onClose();
+    } catch (e: any) {
+      setSaveError(e?.message === 'TIMEOUT'
+        ? 'La conexión tardó demasiado. Inténtalo de nuevo.'
+        : (e?.message ?? 'No se pudo añadir la tarea'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
