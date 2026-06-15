@@ -106,13 +106,19 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
         if (err) throw err;
         onSaved({ ...service, ...patch });
       } else {
-        const { data, error: err } = await withTimeout(
+        const newId = crypto.randomUUID();
+        const { error: err } = await withTimeout(
           supabase.from('subscriptions')
-            .insert({ ...patch, household_id: household.id, created_by: user?.id })
-            .select().single()
+            .insert({ id: newId, ...patch, household_id: household.id, created_by: user?.id })
         );
         if (err) throw err;
-        onSaved(data as Subscription);
+        onSaved({
+          id: newId,
+          household_id: household.id,
+          created_by: user?.id ?? null,
+          created_at: new Date().toISOString(),
+          ...patch,
+        } as Subscription);
       }
       onClose();
     } catch (e: any) {
