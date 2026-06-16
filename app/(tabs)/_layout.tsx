@@ -226,9 +226,9 @@ function CustomTabBar({ state, navigation }: any) {
   const { accent, fabOpen, closeFab } = useNidoStore();
 
   const TABS = [
-    { name: 'index',   label: 'Semana',  Icon: IconHome },
-    { name: 'nido',    label: 'Nido',    Icon: IconNest },
     { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
+    { name: 'nido',    label: 'Nido',    Icon: IconNest },
+    { name: 'index',   label: 'Semana',  Icon: IconHome },
     { name: 'servicios', label: 'Servicios', Icon: IconChart },
     { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
   ];

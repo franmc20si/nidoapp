@@ -176,7 +176,7 @@ export default function NidoScreen() {
             <Text style={s.title}>{household?.name ?? 'Nuestro nido'}</Text>
           </View>
           <TouchableOpacity style={[s.headerAddBtn, { backgroundColor: accent.hex }]} onPress={openFab} activeOpacity={0.8}>
-            <Text style={s.headerAddBtnText}>+ Añadir</Text>
+            <Text style={s.headerAddBtnText}>+ Tarea</Text>
           </TouchableOpacity>
         </View>
 
