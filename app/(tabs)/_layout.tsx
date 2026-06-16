@@ -15,7 +15,7 @@ import { withTimeout } from '@/lib/withTimeout';
 import {
   IconHome as IcoHome, IconNest as IcoNest,
   IconChart as IcoChart, IconMenu as IcoMenu,
-  IconPlus as IcoPlus, getCatIcon,
+  IconCalendar as IcoCalendar, getCatIcon,
 } from '@/components/icons';
 import { ToastBar } from '@/components/ToastBar';
 
@@ -30,6 +30,9 @@ function IconChart({ active, accent }: { active: boolean; accent: string }) {
 }
 function IconMenuTab({ active, accent }: { active: boolean; accent: string }) {
   return <IcoMenu size={22} color={active ? accent : C.ink3} fill="transparent" strokeWidth={active ? 2.6 : 2} />;
+}
+function IconCalendarTab({ active, accent }: { active: boolean; accent: string }) {
+  return <IcoCalendar size={22} color={active ? accent : C.ink3} fill="transparent" strokeWidth={active ? 2.6 : 2} />;
 }
 
 const TIMES = [
@@ -220,14 +223,14 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
 }
 
 function CustomTabBar({ state, navigation }: any) {
-  const { accent, fabOpen, closeFab, openFab } = useNidoStore();
+  const { accent, fabOpen, closeFab } = useNidoStore();
 
   const TABS = [
     { name: 'index',   label: 'Semana',  Icon: IconHome },
     { name: 'nido',    label: 'Nido',    Icon: IconNest },
-    { name: '__fab',   label: '',        Icon: null },
-    { name: 'servicios', label: 'Servicios', Icon: IconChart },
     { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
+    { name: 'servicios', label: 'Servicios', Icon: IconChart },
+    { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
   ];
 
   return (
@@ -235,16 +238,6 @@ function CustomTabBar({ state, navigation }: any) {
       <AddSheet visible={fabOpen} onClose={closeFab} />
       <View style={tb.bar}>
         {TABS.map((tab) => {
-          if (tab.name === '__fab') {
-            return (
-              <View key="fab" style={tb.fabWrap}>
-                <TouchableOpacity style={[tb.fab, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={openFab} activeOpacity={0.85}>
-                  <IcoPlus size={26} color={C.white} strokeWidth={2.6} />
-                </TouchableOpacity>
-              </View>
-            );
-          }
-
           const routeIndex = state.routes.findIndex((r: any) => r.name === tab.name);
           const focused = state.index === routeIndex;
           const { Icon } = tab;
@@ -275,6 +268,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="servicios" />
         <Tabs.Screen name="reparto" options={{ href: null }} />
         <Tabs.Screen name="menu" />
+        <Tabs.Screen name="calendario" />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>
       <ToastBar />
@@ -296,14 +290,6 @@ const tb = StyleSheet.create({
   ico: { fontSize: 22, opacity: 0.35 },
   icoOn: { opacity: 1 },
   tabLabel: { fontSize: 10, fontFamily: FONT, fontWeight: '500' },
-  fabWrap: { flex: 1, alignItems: 'center', marginTop: -24 },
-  fab: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
-    shadowColor: C.brand, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45, shadowRadius: 16, elevation: 10,
-  },
-  fabIcon: { color: C.white, fontSize: 30, lineHeight: 34, fontWeight: '300' },
 
   // Sheet
   scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },

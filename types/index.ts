@@ -83,3 +83,14 @@ export interface Subscription {
   created_by: string | null;
   created_at: string;
 }
+
+export interface VacationPeriod {
+  id: string;
+  household_id: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
+  label: string;
+  color: string;
+  created_by: string | null;
+  created_at: string;
+}

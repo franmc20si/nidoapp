@@ -66,6 +66,18 @@ export function IconMenu({ size = 24, color = '#211C17', fill = 'transparent', s
   );
 }
 
+// ── Calendar / Calendario ───────────────────────────────────────────────────
+export function IconCalendar({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3" y="5" width="18" height="16" rx="2" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
+      <Line x1="3" y1="10" x2="21" y2="10" stroke={color} strokeWidth={strokeWidth} />
+      <Line x1="8" y1="3" x2="8" y2="7" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+      <Line x1="16" y1="3" x2="16" y2="7" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 // ── Bell / Campana ────────────────────────────────────────────────────────────
 export function IconBell({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
