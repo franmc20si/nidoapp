@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
+import { withTimeout } from '@/lib/withTimeout';
 
 // ─── tipos compartidos ───────────────────────────────────────────────────────
 export interface Recipe {
@@ -39,6 +40,7 @@ interface MenuState {
   recipes: Recipe[];
   weeklyPlans: WeeklyPlans;
   loaded: boolean;          // true tras una carga exitosa (distingue "vacío" de "sin cargar")
+  loadError: boolean;       // true si la última carga falló y aún no hay datos
   loadingFor: string | null; // household.id de la carga en curso (evita cargas duplicadas)
 
   loadMenu: (householdId: string) => Promise<void>;
@@ -60,6 +62,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   recipes: [],
   weeklyPlans: {},
   loaded: false,
+  loadError: false,
   loadingFor: null,
 
   recipeById: (id) => id ? get().recipes.find(r => r.id === id) : undefined,
@@ -68,11 +71,11 @@ export const useMenuStore = create<MenuState>((set, get) => ({
   loadMenu: async (householdId) => {
     if (!householdId) return;
     if (get().loadingFor === householdId) return; // ya hay una carga en curso para este household
-    set({ loadingFor: householdId });
+    set({ loadingFor: householdId, loadError: false });
     try {
       const [recipesRes, plansRes, migrationDoneRaw] = await Promise.all([
-        supabase.from('recipes').select('*').eq('household_id', householdId),
-        supabase.from('meal_plans').select('week_key, plan').eq('household_id', householdId),
+        withTimeout(supabase.from('recipes').select('*').eq('household_id', householdId)),
+        withTimeout(supabase.from('meal_plans').select('week_key, plan').eq('household_id', householdId)),
         AsyncStorage.getItem(STORAGE_MIGRATION_DONE),
       ]);
 
@@ -85,6 +88,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
       // (ids r1..r7) que no casan con los ids reales del plan.
       if (recipesRes.error) {
         // se conserva el estado actual; abajo no marcamos loaded si nunca cargó
+        if (!get().loaded) set({ loadError: true });
       } else if (recipesRes.data && recipesRes.data.length > 0) {
         set({
           recipes: recipesRes.data.map((r: any) => ({
@@ -155,6 +159,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
       if (!recipesRes.error) set({ loaded: true });
     } catch (e) {
       console.error('[menuStore] loadMenu error', e);
+      if (!get().loaded) set({ loadError: true });
     } finally {
       set({ loadingFor: null });
     }

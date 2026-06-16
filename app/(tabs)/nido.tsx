@@ -14,6 +14,8 @@ import { IlluNidoLimpio } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 import TaskEditSheet from '@/components/TaskEditSheet';
 import { showToast } from '@/store/toastStore';
+import { withTimeout } from '@/lib/withTimeout';
+import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
 export default function NidoScreen() {
   const { household, user } = useAuthStore();
@@ -24,6 +26,9 @@ export default function NidoScreen() {
   const [statusFilter, setStatusFilter] = useState<'pendiente' | 'realizada' | 'todas'>('pendiente');
   const [refreshing, setRefreshing] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const fetchTokenRef = useRef(0);
 
   const fetchProfiles = async () => {
@@ -49,26 +54,39 @@ export default function NidoScreen() {
   const fetchTasks = async () => {
     if (!household) return;
     const token = ++fetchTokenRef.current;
+    setLoading(true);
+    setLoadError(false);
 
-    const { data } = await supabase.from('tasks').select('*')
-      .eq('household_id', household.id).order('created_at', { ascending: false });
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('tasks').select('*')
+          .eq('household_id', household.id).order('created_at', { ascending: false })
+      );
+      if (error) throw error;
 
-    // Discard result if a newer fetch has started since this one
-    if (token !== fetchTokenRef.current) return;
-
-    const tasks: Task[] = (data ?? []) as Task[];
-
-    const toReset = tasks.filter(t =>
-      t.is_done && t.is_recurring && isDueAgain(t.due_date)
-    );
-    if (toReset.length > 0) {
-      const ids = toReset.map(t => t.id);
-      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids);
+      // Discard result if a newer fetch has started since this one
       if (token !== fetchTokenRef.current) return;
-      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
-    }
 
-    setTasks(tasks);
+      const tasks: Task[] = (data ?? []) as Task[];
+
+      const toReset = tasks.filter(t =>
+        t.is_done && t.is_recurring && isDueAgain(t.due_date)
+      );
+      if (toReset.length > 0) {
+        const ids = toReset.map(t => t.id);
+        await withTimeout(supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids));
+        if (token !== fetchTokenRef.current) return;
+        toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
+      }
+
+      setTasks(tasks);
+      setLoaded(true);
+    } catch (e) {
+      console.error('[nido] fetchTasks error', e);
+      if (token === fetchTokenRef.current) setLoadError(true);
+    } finally {
+      if (token === fetchTokenRef.current) setLoading(false);
+    }
   };
 
   useEffect(() => { fetchTasks(); fetchProfiles(); }, [household?.id, taskRev]);
@@ -128,6 +146,13 @@ export default function NidoScreen() {
     tasks.filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
   );
   const allShare = buildShare(tasks);
+
+  if (!loaded && loading) {
+    return <SafeAreaView style={s.root}><ScreenLoader color={accent.hex} /></SafeAreaView>;
+  }
+  if (!loaded && loadError) {
+    return <SafeAreaView style={s.root}><ScreenError onRetry={fetchTasks} color={accent.hex} /></SafeAreaView>;
+  }
 
   return (
     <SafeAreaView style={s.root}>

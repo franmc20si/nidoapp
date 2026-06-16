@@ -11,13 +11,7 @@ import { RECURRENCE_OPTS, RecurrenceRule } from '@/lib/recurrence';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
-
-function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(p),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
-  ]);
-}
+import { withTimeout } from '@/lib/withTimeout';
 import {
   IconHome as IcoHome, IconNest as IcoNest,
   IconChart as IcoChart, IconMenu as IcoMenu,

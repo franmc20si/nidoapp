@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
 import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from '@/constants/services';
 import ServiceSheet from '@/components/ServiceSheet';
+import { withTimeout } from '@/lib/withTimeout';
+import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
 // Días hasta la próxima fecha de pago
 function daysUntil(iso: string | null): number | null {
@@ -40,15 +42,31 @@ export default function ServiciosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [sheetOpen, setSheetOpen]   = useState(false);
+  const [loading, setLoading]       = useState(true);
+  const [loaded, setLoaded]         = useState(false);
+  const [loadError, setLoadError]   = useState(false);
 
   const fetchSubs = async () => {
     if (!household) return;
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('household_id', household.id)
-      .order('next_payment', { ascending: true, nullsFirst: false });
-    setSubs((data ?? []) as Subscription[]);
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('household_id', household.id)
+          .order('next_payment', { ascending: true, nullsFirst: false })
+      );
+      if (error) throw error;
+      setSubs((data ?? []) as Subscription[]);
+      setLoaded(true);
+    } catch (e) {
+      console.error('[servicios] fetchSubs error', e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useFocusEffect(useCallback(() => { fetchSubs(); }, [household?.id]));
@@ -67,6 +85,13 @@ export default function ServiciosScreen() {
     byCat[k].push(s);
   }
   const orderedCats = SERVICE_CATS.map(c => c.key).filter(k => byCat[k]?.length);
+
+  if (!loaded && loading) {
+    return <SafeAreaView style={s.root}><ScreenLoader color={accent.hex} /></SafeAreaView>;
+  }
+  if (!loaded && loadError) {
+    return <SafeAreaView style={s.root}><ScreenError onRetry={fetchSubs} color={accent.hex} /></SafeAreaView>;
+  }
 
   return (
     <SafeAreaView style={s.root}>

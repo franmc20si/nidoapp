@@ -15,6 +15,8 @@ import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import TaskEditSheet from '@/components/TaskEditSheet';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+import { withTimeout } from '@/lib/withTimeout';
+import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
 // ── menu helpers ─────────────────────────────────────────────────────────────
 function mixHex(a: string, b: string, t: number) {
@@ -70,6 +72,9 @@ export default function HoyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // Menú: estado compartido con la tab Menú (mismo store → nunca divergen)
   const { weeklyPlans, recipeById, loadMenu } = useMenuStore();
@@ -104,24 +109,37 @@ export default function HoyScreen() {
 
   const fetchTasks = async () => {
     if (!household) return;
-    const { data } = await supabase.from('tasks').select('*')
-      .eq('household_id', household.id).order('created_at', { ascending: false });
-    const tasks: Task[] = (data ?? []) as Task[];
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('tasks').select('*')
+          .eq('household_id', household.id).order('created_at', { ascending: false })
+      );
+      if (error) throw error;
+      const tasks: Task[] = (data ?? []) as Task[];
 
-    // Reset recurring tasks whose next due date has arrived
-    const toReset = tasks.filter(t =>
-      t.is_done && t.is_recurring && isDueAgain((t as any).due_date)
-    );
-    if (toReset.length > 0) {
-      const ids = toReset.map(t => t.id);
-      await supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids);
-      toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
+      // Reset recurring tasks whose next due date has arrived
+      const toReset = tasks.filter(t =>
+        t.is_done && t.is_recurring && isDueAgain((t as any).due_date)
+      );
+      if (toReset.length > 0) {
+        const ids = toReset.map(t => t.id);
+        await withTimeout(supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids));
+        toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
+      }
+
+      setTasks(tasks);
+      setRemoved(new Set());
+      setLoaded(true);
+    } catch (e) {
+      console.error('[index] fetchTasks error', e);
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+      // Datos (o error) ya resueltos → permite ocultar el splash (sin parpadeo vacío)
+      setHomeReady(true);
     }
-
-    setTasks(tasks);
-    setRemoved(new Set());
-    // Datos iniciales listos → permite ocultar el splash (sin parpadeo vacío)
-    setHomeReady(true);
   };
 
   useEffect(() => { fetchTasks(); }, [household, taskRev]);
@@ -183,6 +201,27 @@ export default function HoyScreen() {
   const total     = weekTasks.length;
   const doneCount = weekDone.length;
   const pct       = total ? Math.round((doneCount / total) * 100) : 0;
+
+  if (!loaded && loading) {
+    return (
+      <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
+        <StatusBar style="light" />
+        <View style={{ flex: 1, backgroundColor: C.paper }}>
+          <ScreenLoader color={accent.hex} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (!loaded && loadError) {
+    return (
+      <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
+        <StatusBar style="light" />
+        <View style={{ flex: 1, backgroundColor: C.paper }}>
+          <ScreenError onRetry={fetchTasks} color={accent.hex} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>

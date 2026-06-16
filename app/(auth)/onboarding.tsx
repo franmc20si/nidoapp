@@ -10,18 +10,9 @@ import { useAuthStore } from '@/store/authStore';
 import { C, R, FONT } from '@/constants/theme';
 import { NIDO_COLORS } from '@/constants/nidoColors';
 import { IlluNidoLimpio } from '@/components/icons';
+import { withTimeout } from '@/lib/withTimeout';
 
 type Step = 'choose' | 'create' | 'join';
-
-// supabase-js no lleva timeout propio; sin esto, un fetch o un lock de auth
-// bloqueado en web (frecuente justo tras el callback de Google) haría que el
-// await no se resuelva nunca y el botón se quede girando para siempre.
-function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(p),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
-  ]);
-}
 
 export default function OnboardingScreen() {
   const { user, setHousehold } = useAuthStore();

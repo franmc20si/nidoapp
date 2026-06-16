@@ -9,15 +9,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
-
-// supabase-js no lleva timeout propio; sin esto un lock de auth/fetch bloqueado
-// en web dejaría el botón girando para siempre.
-function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(p),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
-  ]);
-}
+import { withTimeout } from '@/lib/withTimeout';
 
 // ── Fechas: ISO (yyyy-mm-dd) ⇆ texto (DD/MM/AAAA) ──────────────────────────
 function isoToDisplay(iso: string | null): string {

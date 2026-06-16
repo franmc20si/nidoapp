@@ -12,6 +12,7 @@ import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
 import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
+import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
 // ─── color helpers ─────────────────────────────────────────────────────────
 function hexToRgb(h: string): [number, number, number] {
@@ -63,6 +64,7 @@ export default function MenuScreen() {
     recipes, weeklyPlans, recipeById,
     loadMenu, assignPlan,
     saveRecipe: storeSaveRecipe, deleteRecipe: storeDeleteRecipe,
+    loaded, loadError,
   } = useMenuStore();
 
   // Current week's plan (derived)
@@ -116,6 +118,17 @@ export default function MenuScreen() {
   };
 
   const dim = C.ink3;
+
+  if (!loaded && !loadError) {
+    return <SafeAreaView style={s.root}><ScreenLoader color={accent.hex} /></SafeAreaView>;
+  }
+  if (!loaded && loadError) {
+    return (
+      <SafeAreaView style={s.root}>
+        <ScreenError onRetry={() => household?.id && loadMenu(household.id)} color={accent.hex} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>

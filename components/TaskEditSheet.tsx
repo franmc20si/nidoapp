@@ -11,6 +11,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 import { getCatIcon } from '@/components/icons';
 import { Task } from '@/types';
+import { withTimeout } from '@/lib/withTimeout';
 
 const TIMES = [
   { label: '15 min', min: 15 },
@@ -18,16 +19,6 @@ const TIMES = [
   { label: '1 h',    min: 60 },
   { label: '2 h',    min: 120 },
 ];
-
-// Evita que una petición colgada deje el botón girando para siempre.
-// supabase-js no lleva timeout propio; sin esto, un fetch o un lock de auth
-// bloqueado en web haría que el await no se resuelva nunca.
-function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(p),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms)),
-  ]);
-}
 
 interface Props {
   task: Task | null;
