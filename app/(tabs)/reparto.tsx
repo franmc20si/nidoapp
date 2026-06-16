@@ -17,13 +17,26 @@ function getStartDate(period: 'semana' | 'mes' | 'ano'): string {
   return d.toISOString();
 }
 
-const ACHIEVEMENTS = [
-  { Icon: AchFlame,  title: 'Racha de 5', desc: '5 días seguidos', unlocked: true },
-  { Icon: AchNest,   title: 'Nido lleno', desc: '100% en un día',  unlocked: true },
-  { Icon: AchStar,   title: 'Centena',    desc: '100 puntos',      unlocked: true },
-  { Icon: AchTrophy, title: 'Maratón',    desc: '30 tareas',       unlocked: false },
-  { Icon: AchGem,    title: 'Leyenda',    desc: '500 puntos',      unlocked: false },
-];
+function computeStreak(dates: string[]): number {
+  const days = new Set(dates.map((d) => new Date(d).toDateString()));
+  let streak = 0;
+  const cursor = new Date();
+  if (!days.has(cursor.toDateString())) cursor.setDate(cursor.getDate() - 1);
+  while (days.has(cursor.toDateString())) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function computeMaxPerDay(dates: string[]): number {
+  const counts: Record<string, number> = {};
+  for (const d of dates) {
+    const key = new Date(d).toDateString();
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return Object.values(counts).reduce((max, c) => Math.max(max, c), 0);
+}
 
 interface Member { id: string; name: string; ini: string; color: string; pts: number; tasks: number; }
 
@@ -33,6 +46,10 @@ export default function RepartoScreen() {
   const { household, user } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const [allTimePts, setAllTimePts] = useState(0);
+  const [allTimeTasks, setAllTimeTasks] = useState(0);
+  const [maxPerDay, setMaxPerDay] = useState(0);
 
   const loadMembers = async () => {
     if (!household) return;
@@ -68,12 +85,33 @@ export default function RepartoScreen() {
     });
     built.sort((a, b) => (a.id === user?.id ? -1 : 0) - (b.id === user?.id ? -1 : 0));
     setMembers(built);
+
+    // All-time stats (independent of the period filter) for streak + achievements
+    const { data: allTasks } = await supabase
+      .from('tasks')
+      .select('completed_at, points')
+      .eq('household_id', household.id)
+      .eq('is_done', true)
+      .not('completed_at', 'is', null);
+    const dates = (allTasks ?? []).map((t: any) => t.completed_at as string);
+    setStreak(computeStreak(dates));
+    setMaxPerDay(computeMaxPerDay(dates));
+    setAllTimeTasks(dates.length);
+    setAllTimePts((allTasks ?? []).reduce((s: number, t: any) => s + (t.points ?? 10), 0));
   };
 
   useEffect(() => { loadMembers(); }, [household, period]);
 
   const MEMBERS = members;
   const totalPts = MEMBERS.reduce((s, m) => s + m.pts, 0) || 1;
+
+  const ACHIEVEMENTS = [
+    { Icon: AchFlame,  title: 'Racha de 5', desc: '5 días seguidos', unlocked: streak >= 5 },
+    { Icon: AchNest,   title: 'Nido lleno', desc: 'Día muy activo',  unlocked: maxPerDay >= 4 },
+    { Icon: AchStar,   title: 'Centena',    desc: '100 puntos',      unlocked: allTimePts >= 100 },
+    { Icon: AchTrophy, title: 'Maratón',    desc: '30 tareas',       unlocked: allTimeTasks >= 30 },
+    { Icon: AchGem,    title: 'Leyenda',    desc: '500 puntos',      unlocked: allTimePts >= 500 },
+  ];
 
   const periodLabel = period === 'semana' ? 'Esta semana' : period === 'mes' ? 'Este mes' : 'Este año';
 
@@ -132,7 +170,7 @@ export default function RepartoScreen() {
               <Text style={s.balanceCap}>{balanceStatus.desc}</Text>
             </View>
             <View style={s.streakPill}>
-              <Text style={s.streakText}>🔥 5</Text>
+              <Text style={s.streakText}>🔥 {streak}</Text>
             </View>
           </View>
           <View style={s.stackBar}>

@@ -12,7 +12,7 @@ import { NIDO_COLORS } from '@/constants/nidoColors';
 import { IlluNidoLimpio } from '@/components/icons';
 import { withTimeout } from '@/lib/withTimeout';
 
-type Step = 'choose' | 'create' | 'join';
+type Step = 'choose' | 'create' | 'join' | 'created';
 
 export default function OnboardingScreen() {
   const { user, setHousehold } = useAuthStore();
@@ -54,7 +54,7 @@ export default function OnboardingScreen() {
       setCreatedCode(code);
       setHousehold(data);
       setLoading(false);
-      router.replace('/(tabs)');
+      setStep('created');
     } catch (e: any) {
       showError(e?.message === 'TIMEOUT'
         ? 'La conexión tardó demasiado. Revisa tu red e inténtalo de nuevo.'
@@ -200,6 +200,42 @@ export default function OnboardingScreen() {
     );
   }
 
+  // ── Created step: show invite code ───────────────────────────────────────
+  if (step === 'created') {
+    const shareCode = async () => {
+      try {
+        await Share.share({ message: `Únete a mi nido en la app Nido. Código de invitación: ${createdCode}` });
+      } catch {}
+    };
+    return (
+      <SafeAreaView style={s.root}>
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+          <View style={s.illuWrap}>
+            <IlluNidoLimpio size={100} color={accent.hex} fill={accent.wash} />
+          </View>
+
+          <Text style={s.stepEyebrow}>NIDO CREADO</Text>
+          <Text style={s.stepTitle}>{householdName.trim()}{'\n'}ya está listo</Text>
+          <Text style={s.stepSub}>Comparte este código con quien quieras que se una a tu nido</Text>
+
+          <View style={[s.preview, { backgroundColor: accent.wash, borderColor: accent.hex + '30', justifyContent: 'center' }]}>
+            <Text style={[s.codeBig, { color: accent.hex }]}>{createdCode}</Text>
+          </View>
+
+          <TouchableOpacity style={[s.btnPrimary, { backgroundColor: accent.hex, marginBottom: 12 }]} onPress={shareCode} activeOpacity={0.85}>
+            <Text style={s.btnPrimaryText}>Compartir código ›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[s.btnPrimary, { backgroundColor: C.ink }]} onPress={() => router.replace('/(tabs)')} activeOpacity={0.85}>
+            <Text style={s.btnPrimaryText}>Continuar</Text>
+          </TouchableOpacity>
+
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   // ── Join step ─────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.root}>
@@ -302,6 +338,7 @@ const s = StyleSheet.create({
   },
   previewName: { fontSize: 17, fontWeight: '500', fontFamily: FONT, letterSpacing: -0.3 },
   previewSub:  { fontSize: 12, color: C.ink3, fontFamily: FONT, marginTop: 2 },
+  codeBig:     { fontSize: 32, fontWeight: '700', fontFamily: FONT, letterSpacing: 6, textAlign: 'center' },
 
   btnPrimary:     { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },
   btnPrimaryText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },

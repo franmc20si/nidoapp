@@ -157,7 +157,7 @@ export default function MenuScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={s.addRecipeBtn} onPress={() => setEditing('new')}>
+        <TouchableOpacity style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')}>
           <Text style={s.addRecipeBtnText}>+ Receta</Text>
         </TouchableOpacity>
       </View>
@@ -646,9 +646,9 @@ const s = StyleSheet.create({
   addRecipeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     height: 38, paddingHorizontal: 15, borderRadius: R.pill,
-    backgroundColor: C.ink, marginTop: 14,
+    marginTop: 14,
   },
-  addRecipeBtnText: { color: C.paper, fontSize: 14, fontWeight: '600', fontFamily: FONT },
+  addRecipeBtnText: { color: C.white, fontSize: 14, fontWeight: '600', fontFamily: FONT },
 
   todayPill: {
     alignSelf: 'center', marginBottom: 10,

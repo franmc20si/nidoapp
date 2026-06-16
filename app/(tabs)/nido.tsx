@@ -175,8 +175,8 @@ export default function NidoScreen() {
             <Text style={s.eyebrow}>TU NIDO</Text>
             <Text style={s.title}>{household?.name ?? 'Nuestro nido'}</Text>
           </View>
-          <TouchableOpacity style={s.iconBtn} activeOpacity={0.7}>
-            <Text style={s.iconBtnText}>⚙</Text>
+          <TouchableOpacity style={[s.headerAddBtn, { backgroundColor: accent.hex }]} onPress={openFab} activeOpacity={0.8}>
+            <Text style={s.headerAddBtnText}>+ Añadir</Text>
           </TouchableOpacity>
         </View>
 
@@ -296,8 +296,8 @@ const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title: { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
-  iconBtnText: { fontSize: 18, color: C.ink2 },
+  headerAddBtn: { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
+  headerAddBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
 
   statsCard: { flexDirection: 'row', alignItems: 'center', height: 92, marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line, marginBottom: 16 },
   statCol: { flex: 1, alignItems: 'center' },
