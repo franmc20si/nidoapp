@@ -242,6 +242,7 @@ function CustomTabBar({ state, navigation }: any) {
           const focused = state.index === routeIndex;
           const { Icon } = tab;
 
+          const isCenter = tab.name === 'index';
           return (
             <TouchableOpacity
               key={tab.name}
@@ -249,7 +250,13 @@ function CustomTabBar({ state, navigation }: any) {
               onPress={() => navigation.navigate(tab.name)}
               activeOpacity={0.7}
             >
-              {Icon && <Icon active={focused} accent={accent.hex} />}
+              {isCenter ? (
+                <View style={[tb.centerPill, { backgroundColor: focused ? accent.hex + '22' : C.paperDeep }]}>
+                  {Icon && <Icon active={focused} accent={accent.hex} />}
+                </View>
+              ) : (
+                Icon && <Icon active={focused} accent={accent.hex} />
+              )}
               <Text style={[tb.tabLabel, { color: focused ? accent.hex : C.ink3 }]}>{tab.label}</Text>
             </TouchableOpacity>
           );
@@ -287,6 +294,7 @@ const tb = StyleSheet.create({
     alignItems: 'flex-end',
   },
   tab: { flex: 1, alignItems: 'center', gap: 4 },
+  centerPill: { width: 52, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   ico: { fontSize: 22, opacity: 0.35 },
   icoOn: { opacity: 1 },
   tabLabel: { fontSize: 10, fontFamily: FONT, fontWeight: '500' },

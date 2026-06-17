@@ -9,27 +9,26 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useMenuStore } from '@/store/menuStore';
 import { weekKey } from '@/lib/week';
 import { supabase } from '@/lib/supabase';
-import { Task } from '@/types';
-import TaskCard from '@/components/TaskCard';
+import { Task, ShoppingItem, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
-import TaskEditSheet from '@/components/TaskEditSheet';
-import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+import { isDueAgain, nextDueDate } from '@/lib/recurrence';
 import { withTimeout } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
+import { getServiceCat } from '@/constants/services';
 
-// ── menu helpers ─────────────────────────────────────────────────────────────
+// ── helpers ──────────────────────────────────────────────────────────────────
 function mixHex(a: string, b: string, t: number) {
-  const hex = (h: string): [number,number,number] => {
-    h = h.replace('#',''); if (h.length===3) h=h.split('').map(c=>c+c).join('');
-    const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255];
+  const hex = (h: string): [number, number, number] => {
+    h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join('');
+    const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   };
-  const x=hex(a), y=hex(b);
-  return '#'+[0,1,2].map(i=>Math.round(x[i]+(y[i]-x[i])*t).toString(16).padStart(2,'0')).join('');
+  const x = hex(a), y = hex(b);
+  return '#' + [0, 1, 2].map(i => Math.round(x[i] + (y[i] - x[i]) * t).toString(16).padStart(2, '0')).join('');
 }
 
 function getMondayOfWeek(ref: Date): Date {
-  const m = new Date(ref); m.setDate(ref.getDate()-(ref.getDay()+6)%7); m.setHours(0,0,0,0); return m;
+  const m = new Date(ref); m.setDate(ref.getDate() - (ref.getDay() + 6) % 7); m.setHours(0, 0, 0, 0); return m;
 }
 
 function getGreeting(name: string) {
@@ -39,9 +38,32 @@ function getGreeting(name: string) {
   return `Buenas noches, ${name}`;
 }
 
-const DAYS_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const DAYS_LONG = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const diff = new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
+  return Math.ceil(diff / 86400000);
+}
+
+function daysLabel(days: number | null): string {
+  if (days === null) return '';
+  if (days < 0) return 'Vencido';
+  if (days === 0) return 'Hoy';
+  if (days === 1) return 'Mañana';
+  return `En ${days} días`;
+}
+
+function urgencyColor(days: number | null): string {
+  if (days === null) return C.ink3;
+  if (days <= 3) return '#c0392b';
+  if (days <= 7) return C.cena;
+  return C.ink3;
+}
+
+const fmt = (n: number) => n.toFixed(2).replace('.', ',') + ' €';
+
+const DAYS_SHORT  = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const MONTHS      = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const DAYS_LONG   = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 const weekNumber = (d: Date) => {
   const start = new Date(d.getFullYear(), 0, 1);
@@ -50,7 +72,7 @@ const weekNumber = (d: Date) => {
 
 function getWeekDays() {
   const today = new Date();
-  const dow = (today.getDay() + 6) % 7; // Mon=0
+  const dow = (today.getDay() + 6) % 7;
   const monday = new Date(today);
   monday.setDate(today.getDate() - dow);
   return Array.from({ length: 7 }, (_, i) => {
@@ -64,49 +86,39 @@ export default function HoyScreen() {
   const { profile, household, user, setHomeReady } = useAuthStore();
   const { accent, loadAccent } = useNidoStore();
   const taskRev = useNidoStore((s) => s.taskRev);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [tab, setTab] = useState<'pendiente' | 'hecho'>('pendiente');
-  const [bellActive, setBellActive] = useState(false);
+  const [tasks, setTasks]               = useState<Task[]>([]);
+  const [pendingItems, setPendingItems]  = useState<ShoppingItem[]>([]);
+  const [upcomingSubs, setUpcomingSubs]  = useState<Subscription[]>([]);
+  const [bellActive, setBellActive]      = useState(false);
   const [nidoSheetVisible, setNidoSheetVisible] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [profiles, setProfiles] = useState<Record<string, string>>({});
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing]      = useState(false);
+  const [loading, setLoading]            = useState(true);
+  const [loaded, setLoaded]              = useState(false);
+  const [loadError, setLoadError]        = useState(false);
 
-  // Menú: estado compartido con la tab Menú (mismo store → nunca divergen)
   const { weeklyPlans, recipeById, loadMenu } = useMenuStore();
-  const todayPlan = weeklyPlans[weekKey(new Date())] ?? {};
-  const todayDow  = (new Date().getDay() + 6) % 7;
+  const todayPlan   = weeklyPlans[weekKey(new Date())] ?? {};
+  const todayDow    = (new Date().getDay() + 6) % 7;
   const todayComida = todayPlan[`${todayDow}-comida`];
   const todayCena   = todayPlan[`${todayDow}-cena`];
 
-  // Load saved accent when household is known
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
-
-  // Carga del menú a través del store compartido
   useEffect(() => { if (household?.id) loadMenu(household.id); }, [household?.id]);
   useFocusEffect(useCallback(() => { if (household?.id) loadMenu(household.id); }, [household?.id]));
 
-  // Set browser theme-color meta tag on web
   useEffect(() => {
     if (typeof document !== 'undefined') {
       let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        document.head.appendChild(meta);
-      }
+      if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
       meta.content = accent.hex;
     }
   }, [accent.hex]);
 
   const today = new Date();
-  const days = getWeekDays();
+  const days  = getWeekDays();
   const firstName = profile?.full_name?.split(' ')[0] ?? 'tú';
 
+  // ── Tasks (para calcular % semanal) ──────────────────────────────────────
   const fetchTasks = async () => {
     if (!household) return;
     setLoading(true);
@@ -117,90 +129,90 @@ export default function HoyScreen() {
           .eq('household_id', household.id).order('created_at', { ascending: false })
       );
       if (error) throw error;
-      const tasks: Task[] = (data ?? []) as Task[];
+      const ts: Task[] = (data ?? []) as Task[];
 
-      // Reset recurring tasks whose next due date has arrived
-      const toReset = tasks.filter(t =>
-        t.is_done && t.is_recurring && isDueAgain((t as any).due_date)
-      );
+      const toReset = ts.filter(t => t.is_done && t.is_recurring && isDueAgain((t as any).due_date));
       if (toReset.length > 0) {
         const ids = toReset.map(t => t.id);
         await withTimeout(supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids));
         toReset.forEach(t => { t.is_done = false; (t as any).due_date = null; t.completed_by = null; t.completed_at = null; });
       }
 
-      setTasks(tasks);
-      setRemoved(new Set());
+      setTasks(ts);
       setLoaded(true);
     } catch (e) {
       console.error('[index] fetchTasks error', e);
       setLoadError(true);
     } finally {
       setLoading(false);
-      // Datos (o error) ya resueltos → permite ocultar el splash (sin parpadeo vacío)
       setHomeReady(true);
     }
   };
 
-  useEffect(() => { fetchTasks(); }, [household, taskRev]);
-  useFocusEffect(useCallback(() => { fetchTasks(); }, [household]));
-
-  const fetchProfiles = useCallback(async () => {
+  // ── Falta por comprar ─────────────────────────────────────────────────────
+  const fetchShoppingItems = async () => {
     if (!household) return;
-    const { data: members } = await supabase
-      .from('household_members').select('user_id').eq('household_id', household.id);
-    if (!members?.length) return;
-    const { data: profs } = await supabase
-      .from('profiles').select('id, full_name').in('id', members.map(m => m.user_id));
-    if (!profs) return;
-    const map: Record<string, string> = {};
-    for (const p of profs) { if (p.full_name) map[p.id] = p.full_name.split(' ')[0]; }
-    setProfiles(map);
-  }, [household]);
-
-  useEffect(() => { fetchProfiles(); }, [household]);
-
-  const toggleTask = async (task: Task) => {
-    const anyTask = task as any;
-    const completing = !task.is_done;
-    const now = new Date().toISOString();
-    if (completing && task.is_recurring && anyTask.recurrence_rule) {
-      const due = nextDueDate(anyTask.recurrence_rule);
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: user?.id ?? null, completed_at: now } : t));
-      await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: user?.id, completed_at: now }).eq('id', task.id);
-    } else {
-      const patch = completing
-        ? { is_done: true,  completed_by: user?.id ?? null, completed_at: now }
-        : { is_done: false, completed_by: null, completed_at: null };
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t));
-      await supabase.from('tasks').update(patch).eq('id', task.id);
+    try {
+      const { data: lists } = await withTimeout(
+        supabase.from('shopping_lists').select('id').eq('household_id', household.id)
+      );
+      if (!lists?.length) { setPendingItems([]); return; }
+      const listIds = lists.map((l: any) => l.id);
+      const wk = weekKey(new Date());
+      const { data: items } = await withTimeout(
+        supabase.from('shopping_items')
+          .select('*')
+          .in('list_id', listIds)
+          .eq('week_key', wk)
+          .eq('is_checked', false)
+          .limit(6)
+      );
+      setPendingItems((items ?? []) as ShoppingItem[]);
+    } catch {
+      setPendingItems([]);
     }
   };
 
-  const handleAnimatedOut = (task: Task) => {
-    setRemoved((prev) => new Set(prev).add(task.id));
+  // ── Próximos pagos ────────────────────────────────────────────────────────
+  const fetchUpcomingSubs = async () => {
+    if (!household) return;
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data } = await withTimeout(
+        supabase.from('subscriptions')
+          .select('*')
+          .eq('household_id', household.id)
+          .not('next_payment', 'is', null)
+          .gte('next_payment', todayStr)
+          .order('next_payment', { ascending: true })
+          .limit(2)
+      );
+      setUpcomingSubs((data ?? []) as Subscription[]);
+    } catch {
+      setUpcomingSubs([]);
+    }
   };
 
-  const visible   = tasks.filter((t) => !removed.has(t.id));
-  const pending   = visible.filter((t) => !t.is_done);
-  const done      = visible.filter((t) => t.is_done);
-  const hoyTasks  = pending; // kept for greeting subtitle
+  useEffect(() => { fetchTasks(); }, [household, taskRev]);
+  useFocusEffect(useCallback(() => {
+    fetchTasks();
+    fetchShoppingItems();
+    fetchUpcomingSubs();
+  }, [household]));
 
-  const shown     = tab === 'hecho' ? done : pending;
-
-  // Weekly % — tasks due this week (Mon–Sun) or with no due date
+  // ── Weekly % ──────────────────────────────────────────────────────────────
   const monday    = getMondayOfWeek(new Date());
-  const sunday    = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23,59,59,999);
-  const weekTasks = visible.filter((t) => {
+  const sunday    = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
+  const weekTasks = tasks.filter(t => {
     const due = (t as any).due_date;
     if (!due) return true;
     const d = new Date(due);
     return d >= monday && d <= sunday;
   });
-  const weekDone  = weekTasks.filter((t) => t.is_done);
+  const doneCount = weekTasks.filter(t => t.is_done).length;
   const total     = weekTasks.length;
-  const doneCount = weekDone.length;
   const pct       = total ? Math.round((doneCount / total) * 100) : 0;
+  const pendingCount = tasks.filter(t => !t.is_done).length;
 
   if (!loaded && loading) {
     return (
@@ -233,20 +245,23 @@ export default function HoyScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={async () => { setRefreshing(true); await fetchTasks(); setRefreshing(false); }}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await Promise.all([fetchTasks(), fetchShoppingItems(), fetchUpcomingSubs()]);
+              setRefreshing(false);
+            }}
             tintColor={accent.hex}
             colors={[accent.hex]}
           />
         }
       >
-
         {/* Top bar */}
         <View style={n.topbar}>
           <View style={{ flex: 1 }}>
             <Text style={n.greetName}>{getGreeting(firstName)}</Text>
             <Text style={n.greetSub}>
-              {hoyTasks.length > 0
-                ? `Hoy el nido necesita ${hoyTasks.length} ${hoyTasks.length === 1 ? 'cosa' : 'cosas'}`
+              {pendingCount > 0
+                ? `Hoy el nido necesita ${pendingCount} ${pendingCount === 1 ? 'cosa' : 'cosas'}`
                 : '¡Nido completado!'}
             </Text>
           </View>
@@ -274,7 +289,7 @@ export default function HoyScreen() {
           <TouchableOpacity
             style={[n.bellBtn, bellActive && { backgroundColor: accent.hex, borderColor: accent.hex }]}
             activeOpacity={0.7}
-            onPress={() => setBellActive((v) => !v)}
+            onPress={() => setBellActive(v => !v)}
           >
             <Text style={n.bellIcon}>🔔</Text>
           </TouchableOpacity>
@@ -294,12 +309,7 @@ export default function HoyScreen() {
           </View>
         </View>
 
-        {/* Alert composer */}
-        {bellActive && (
-          <AlertComposer onClose={() => setBellActive(false)} />
-        )}
-
-        {/* Alert cards */}
+        {bellActive && <AlertComposer onClose={() => setBellActive(false)} />}
         <AlertCards />
 
         {/* Week strip */}
@@ -315,7 +325,7 @@ export default function HoyScreen() {
           ))}
         </View>
 
-        {/* Today's menu */}
+        {/* Menú de hoy */}
         {(todayComida || todayCena) && (() => {
           const comida = recipeById(todayComida);
           const cena   = recipeById(todayCena);
@@ -340,7 +350,7 @@ export default function HoyScreen() {
           );
         })()}
 
-        {/* Nest hero */}
+        {/* Tu nido esta semana */}
         <View style={[n.nestHero, { backgroundColor: accent.wash, borderColor: accent.hex + '28' }]}>
           <View style={n.nestHeroRow}>
             <Text style={n.nestLabel}>TU NIDO ESTA SEMANA</Text>
@@ -356,47 +366,67 @@ export default function HoyScreen() {
           </View>
         </View>
 
-        {/* Filter pills */}
-        <View style={n.filterRow}>
-          {(['pendiente', 'hecho'] as const).map((k) => (
-            <TouchableOpacity key={k} style={[n.pill, tab === k && n.pillOn]} onPress={() => setTab(k)} activeOpacity={0.8}>
-              <Text style={[n.pillText, tab === k && n.pillTextOn]}>
-                {k === 'pendiente' ? `Por hacer${pending.length ? ` · ${pending.length}` : ''}` : `Hecho${done.length ? ` · ${done.length}` : ''}`}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Falta por comprar */}
+        <View style={n.sectionGap}>
+          <View style={n.compraCard}>
+            <View style={n.cardHeaderRow}>
+              <Text style={[n.cardLabel, { color: C.compra }]}>FALTA POR COMPRAR</Text>
+              {pendingItems.length > 0 && (
+                <View style={[n.badge, { backgroundColor: C.compra }]}>
+                  <Text style={n.badgeText}>{pendingItems.length}</Text>
+                </View>
+              )}
+            </View>
+            {pendingItems.length === 0 ? (
+              <Text style={n.cardEmpty}>✓  Lista completa esta semana</Text>
+            ) : (
+              <>
+                {pendingItems.slice(0, 4).map(item => (
+                  <View key={item.id} style={n.itemRow}>
+                    <View style={[n.itemDot, { backgroundColor: C.compra }]} />
+                    <Text style={n.itemName} numberOfLines={1}>
+                      {item.name}
+                      {item.quantity ? <Text style={n.itemUnit}>  {item.quantity}{item.unit ? ` ${item.unit}` : ''}</Text> : null}
+                    </Text>
+                  </View>
+                ))}
+                {pendingItems.length > 4 && (
+                  <Text style={[n.itemMore, { color: C.compra }]}>+ {pendingItems.length - 4} más</Text>
+                )}
+              </>
+            )}
+          </View>
         </View>
 
-        {/* Tasks */}
-        <View style={n.list}>
-          {shown.length === 0 && (
-            <View style={n.empty}>
-              <Text style={n.emptyEmoji}>{tab === 'pendiente' ? '✓' : '○'}</Text>
-              <Text style={n.emptyTitle}>{tab === 'pendiente' ? '¡Todo hecho!' : 'Nada completado aún'}</Text>
-              <Text style={n.emptySub}>{tab === 'pendiente' ? 'No quedan tareas pendientes. Buen trabajo.' : 'Las tareas completadas aparecerán aquí.'}</Text>
-            </View>
-          )}
-          {shown.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onToggle={toggleTask}
-              onAnimatedOut={tab === 'pendiente' ? handleAnimatedOut : undefined}
-              onPress={setEditingTask}
-              completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
-            />
-          ))}
+        {/* Próximos pagos */}
+        <View style={n.sectionGap}>
+          <View style={n.pagosCard}>
+            <Text style={[n.cardLabel, { color: C.suelo }]}>PRÓXIMOS PAGOS</Text>
+            {upcomingSubs.length === 0 ? (
+              <Text style={n.cardEmpty}>Sin pagos próximos</Text>
+            ) : (
+              upcomingSubs.map(sub => {
+                const cat  = getServiceCat(sub.category);
+                const days = daysUntil(sub.next_payment);
+                const col  = urgencyColor(days);
+                return (
+                  <View key={sub.id} style={n.subRow}>
+                    <View style={[n.subIcon, { backgroundColor: cat.tint }]}>
+                      <Text style={n.subEmoji}>{cat.emoji}</Text>
+                    </View>
+                    <View style={n.subInfo}>
+                      <Text style={n.subName}>{sub.name}</Text>
+                      <Text style={n.subAmount}>{fmt(sub.amount)}</Text>
+                    </View>
+                    <Text style={[n.subDays, { color: col }]}>{daysLabel(days)}</Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </View>
 
       </ScrollView>
-
-      <TaskEditSheet
-        task={editingTask}
-        visible={!!editingTask}
-        onClose={() => setEditingTask(null)}
-        onSaved={(updated) => setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))}
-        onDeleted={(id) => setTasks(prev => prev.filter(t => t.id !== id))}
-      />
     </SafeAreaView>
   );
 }
@@ -407,7 +437,7 @@ const n = StyleSheet.create({
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 12 },
   greetName: { fontSize: 27, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6 },
   greetSub: { fontSize: 13, color: C.ink3, fontFamily: FONT, marginTop: 2 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: C.white, fontSize: 16, fontWeight: '600', fontFamily: FONT },
 
   chipRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, marginBottom: 4 },
@@ -432,17 +462,16 @@ const n = StyleSheet.create({
   weekLabel: { fontSize: 12, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
   weekLabelOn: { color: C.ink, fontWeight: '600' },
   weekNum: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
-  weekNumOn: { backgroundColor: C.brand, borderColor: C.brand },
   weekNumText: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT },
   weekNumTextOn: { color: C.white },
-  weekDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: C.brand },
+  weekDot: { width: 5, height: 5, borderRadius: 3 },
 
-  menuCard:  { marginHorizontal: 20, marginBottom: 14 },
+  menuCard: { marginHorizontal: 20, marginBottom: 14 },
   menuLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 8 },
-  menuCols:  { flexDirection: 'row', gap: 10 },
-  menuCol:   { flex: 1, borderRadius: R.l, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 12 },
-  menuSlot:  { fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 },
-  menuDish:  { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.2 },
+  menuCols: { flexDirection: 'row', gap: 10 },
+  menuCol: { flex: 1, borderRadius: R.l, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, padding: 12 },
+  menuSlot: { fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 },
+  menuDish: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.2 },
 
   nestHero: { marginHorizontal: 20, borderRadius: R.l, borderWidth: 1, padding: 16 },
   nestHeroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },
@@ -454,15 +483,38 @@ const n = StyleSheet.create({
   nestBar: { height: 7, borderRadius: 999, backgroundColor: C.ink + '12', overflow: 'hidden' },
   nestBarFill: { height: '100%', borderRadius: 999 },
 
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginTop: 18 },
-  pill: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: R.pill, borderWidth: 1, borderColor: C.line, backgroundColor: 'transparent' },
-  pillOn: { backgroundColor: C.ink, borderColor: C.ink },
-  pillText: { fontSize: 14, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-  pillTextOn: { color: C.paper },
+  sectionGap: { marginTop: 12, paddingHorizontal: 20 },
 
-  list: { paddingHorizontal: 20, marginTop: 14 },
-  empty: { alignItems: 'center', paddingVertical: 40 },
-  emptyEmoji: { fontSize: 40, marginBottom: 12, color: C.brand },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: C.ink, fontFamily: FONT },
-  emptySub: { fontSize: 13, color: C.ink3, marginTop: 4, textAlign: 'center', fontFamily: FONT },
+  // Falta por comprar
+  compraCard: {
+    borderRadius: R.l, borderWidth: 1,
+    borderColor: C.compra + '40',
+    backgroundColor: C.compraTint,
+    padding: 16,
+  },
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  cardLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontFamily: FONT, fontWeight: '600' },
+  badge: { borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
+  badgeText: { color: C.white, fontSize: 11, fontWeight: '700', fontFamily: FONT },
+  cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  itemDot: { width: 6, height: 6, borderRadius: 3 },
+  itemName: { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT, fontWeight: '500' },
+  itemUnit: { fontSize: 12, color: C.ink2, fontWeight: '400' },
+  itemMore: { fontSize: 12, fontFamily: FONT, fontWeight: '600', marginTop: 4 },
+
+  // Próximos pagos
+  pagosCard: {
+    borderRadius: R.l, borderWidth: 1,
+    borderColor: C.suelo + '40',
+    backgroundColor: C.sueloTint,
+    padding: 16,
+  },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
+  subIcon: { width: 34, height: 34, borderRadius: R.m, alignItems: 'center', justifyContent: 'center' },
+  subEmoji: { fontSize: 17 },
+  subInfo: { flex: 1 },
+  subName: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT },
+  subAmount: { fontSize: 12, color: C.ink2, fontFamily: FONT, marginTop: 1 },
+  subDays: { fontSize: 12, fontWeight: '600', fontFamily: FONT },
 });
