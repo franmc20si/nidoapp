@@ -255,6 +255,24 @@ export default function HoyScreen() {
     return out;
   })();
 
+  // Marcar un producto como comprado desde la card → desaparece aquí y queda
+  // tachado en la lista de la compra (misma fuente). Optimista + escritura en
+  // Supabase, según la fuente del item (receta = shopping_checks, manual = shopping_items).
+  const markBought = (item: { id: string; name: string; unit: string | null }) => {
+    if (!household) return;
+    const wk = weekKey(new Date());
+    if (item.id.startsWith('ri-')) {
+      setRecipeChecked(prev => new Set(prev).add(item.id));
+      supabase.from('shopping_checks').upsert(
+        { household_id: household.id, week_key: wk, item_key: item.id },
+        { onConflict: 'household_id,week_key,item_key' }
+      ).then(() => {});
+    } else {
+      setManualItems(prev => prev.filter(m => m.id !== item.id));
+      supabase.from('shopping_items').update({ is_checked: true }).eq('id', item.id).then(() => {});
+    }
+  };
+
   if (!loaded && loading) {
     return (
       <SafeAreaView style={[n.root, { backgroundColor: accent.hex }]}>
@@ -428,13 +446,18 @@ export default function HoyScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 {pendingItems.map(item => (
-                  <View key={item.id} style={n.itemRow}>
-                    <View style={[n.itemDot, { backgroundColor: C.compra }]} />
+                  <TouchableOpacity
+                    key={item.id}
+                    style={n.itemRow}
+                    onPress={() => markBought(item)}
+                    activeOpacity={0.6}
+                  >
+                    <View style={[n.itemCheck, { borderColor: C.compra }]} />
                     <Text style={n.itemName} numberOfLines={1}>
                       {item.name}
                       {item.unit ? <Text style={n.itemUnit}>  {item.unit}</Text> : null}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
@@ -540,9 +563,9 @@ const n = StyleSheet.create({
   badge: { borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
   badgeText: { color: C.white, fontSize: 11, fontWeight: '700', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
-  itemScroll: { maxHeight: 72 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
-  itemDot: { width: 6, height: 6, borderRadius: 3 },
+  itemScroll: { maxHeight: 88 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 7 },
+  itemCheck: { width: 19, height: 19, borderRadius: 10, borderWidth: 2, backgroundColor: 'transparent', flexShrink: 0 },
   itemName: { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT, fontWeight: '500' },
   itemUnit: { fontSize: 12, color: C.ink2, fontWeight: '400' },
 
