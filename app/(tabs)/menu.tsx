@@ -169,7 +169,7 @@ export default function MenuScreen() {
         </TouchableOpacity>
       )}
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 110 }}>
+      <ScrollView alwaysBounceVertical={false} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 32 }}>
         {/* ─── grid ─────────────────────────────────────────────────────── */}
         <View>
           <View style={s.headerRow}>

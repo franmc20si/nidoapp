@@ -291,7 +291,8 @@ export default function CalendarioScreen() {
     <SafeAreaView style={s.root}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        alwaysBounceVertical={false}
+        contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

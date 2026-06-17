@@ -9,7 +9,8 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useMenuStore } from '@/store/menuStore';
 import { weekKey } from '@/lib/week';
 import { supabase } from '@/lib/supabase';
-import { Task, ShoppingItem, Subscription } from '@/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Task, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import { isDueAgain, nextDueDate } from '@/lib/recurrence';
@@ -87,7 +88,8 @@ export default function HoyScreen() {
   const { accent, loadAccent } = useNidoStore();
   const taskRev = useNidoStore((s) => s.taskRev);
   const [tasks, setTasks]               = useState<Task[]>([]);
-  const [pendingItems, setPendingItems]  = useState<ShoppingItem[]>([]);
+  const [manualItems, setManualItems]    = useState<{ id: string; name: string; unit: string | null }[]>([]);
+  const [recipeChecked, setRecipeChecked] = useState<Set<string>>(new Set());
   const [upcomingSubs, setUpcomingSubs]  = useState<Subscription[]>([]);
   const [bellActive, setBellActive]      = useState(false);
   const [nidoSheetVisible, setNidoSheetVisible] = useState(false);
@@ -150,10 +152,23 @@ export default function HoyScreen() {
   };
 
   // ── Falta por comprar ─────────────────────────────────────────────────────
-  const fetchShoppingItems = async () => {
+  // La lista de la compra mezcla dos fuentes (igual que ShoppingListSheet):
+  //   1. Ingredientes de las recetas del menú de la semana — su estado "comprado"
+  //      vive en AsyncStorage (clave nido_shop_checked_<wk>), ids "ri-...".
+  //   2. Productos añadidos a mano — viven en shopping_items (Supabase).
+  // Esta función carga ambas fuentes; el merge final se calcula en render.
+  const fetchShopping = async () => {
     if (!household) return;
+    const wk = weekKey(new Date());
+
+    // 1. Estado "comprado" de los ingredientes de receta (device-local)
     try {
-      const wk = weekKey(new Date());
+      const raw = await AsyncStorage.getItem(`nido_shop_checked_${wk}`);
+      setRecipeChecked(new Set(raw ? JSON.parse(raw) : []));
+    } catch { setRecipeChecked(new Set()); }
+
+    // 2. Productos manuales sin comprar (Supabase)
+    try {
       const { data: list } = await withTimeout(
         supabase.from('shopping_lists')
           .select('id')
@@ -161,16 +176,16 @@ export default function HoyScreen() {
           .eq('week_key', wk)
           .maybeSingle()
       );
-      if (!list?.id) { setPendingItems([]); return; }
+      if (!list?.id) { setManualItems([]); return; }
       const { data: items } = await withTimeout(
         supabase.from('shopping_items')
-          .select('*')
+          .select('id, name, unit, is_checked')
           .eq('list_id', list.id)
           .eq('is_checked', false)
       );
-      setPendingItems((items ?? []) as ShoppingItem[]);
+      setManualItems((items ?? []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit ?? null })));
     } catch {
-      setPendingItems([]);
+      setManualItems([]);
     }
   };
 
@@ -197,7 +212,7 @@ export default function HoyScreen() {
   useEffect(() => { fetchTasks(); }, [household, taskRev]);
   useFocusEffect(useCallback(() => {
     fetchTasks();
-    fetchShoppingItems();
+    fetchShopping();
     fetchUpcomingSubs();
   }, [household]));
 
@@ -214,6 +229,27 @@ export default function HoyScreen() {
   const total     = weekTasks.length;
   const pct       = total ? Math.round((doneCount / total) * 100) : 0;
   const pendingCount = tasks.filter(t => !t.is_done).length;
+
+  // ── Falta por comprar: merge ingredientes de receta (sin marcar) + manuales ──
+  const weekPlan = weeklyPlans[weekKey(new Date())] ?? {};
+  const pendingItems: { id: string; name: string; unit: string | null }[] = (() => {
+    const out: { id: string; name: string; unit: string | null }[] = [];
+    const seen = new Set<string>();
+    Object.values(weekPlan).forEach(rid => {
+      const recipe = recipeById(rid);
+      if (!recipe?.ingredients?.length) return;
+      recipe.ingredients.forEach(ing => {
+        const key = `${ing.name.toLowerCase()}|${ing.category}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const id = `ri-${recipe.name}-${ing.name}`;
+        if (recipeChecked.has(id)) return; // ya comprado
+        out.push({ id, name: ing.name, unit: ing.amount ?? null });
+      });
+    });
+    manualItems.forEach(m => out.push(m));
+    return out;
+  })();
 
   if (!loaded && loading) {
     return (
@@ -241,14 +277,15 @@ export default function HoyScreen() {
       <StatusBar style="light" />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        alwaysBounceVertical={false}
+        contentContainerStyle={{ paddingBottom: 32 }}
         style={{ backgroundColor: C.paper }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await Promise.all([fetchTasks(), fetchShoppingItems(), fetchUpcomingSubs()]);
+              await Promise.all([fetchTasks(), fetchShopping(), fetchUpcomingSubs()]);
               setRefreshing(false);
             }}
             tintColor={accent.hex}
