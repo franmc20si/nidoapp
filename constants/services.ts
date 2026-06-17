@@ -34,6 +34,9 @@ export interface Cycle {
 }
 
 export const CYCLES: Cycle[] = [
+  // Semanal: ~4,33 pagos/mes (52 semanas / 12 meses) → months = 12/52 para que
+  // monthlyEquivalent calcule bien el coste mensual estimado.
+  { key: 'weekly',     label: 'Semanal',    short: '/sem',   months: 12 / 52 },
   { key: 'monthly',    label: 'Mensual',    short: '/mes',   months: 1 },
   { key: 'bimonthly',  label: 'Bimestral',  short: '/2 mes', months: 2 },
   { key: 'quarterly',  label: 'Trimestral', short: '/3 mes', months: 3 },
