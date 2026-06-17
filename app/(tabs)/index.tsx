@@ -153,19 +153,20 @@ export default function HoyScreen() {
   const fetchShoppingItems = async () => {
     if (!household) return;
     try {
-      const { data: lists } = await withTimeout(
-        supabase.from('shopping_lists').select('id').eq('household_id', household.id)
-      );
-      if (!lists?.length) { setPendingItems([]); return; }
-      const listIds = lists.map((l: any) => l.id);
       const wk = weekKey(new Date());
+      const { data: list } = await withTimeout(
+        supabase.from('shopping_lists')
+          .select('id')
+          .eq('household_id', household.id)
+          .eq('week_key', wk)
+          .maybeSingle()
+      );
+      if (!list?.id) { setPendingItems([]); return; }
       const { data: items } = await withTimeout(
         supabase.from('shopping_items')
           .select('*')
-          .in('list_id', listIds)
-          .eq('week_key', wk)
+          .eq('list_id', list.id)
           .eq('is_checked', false)
-          .limit(6)
       );
       setPendingItems((items ?? []) as ShoppingItem[]);
     } catch {
@@ -380,20 +381,21 @@ export default function HoyScreen() {
             {pendingItems.length === 0 ? (
               <Text style={n.cardEmpty}>✓  Lista completa esta semana</Text>
             ) : (
-              <>
-                {pendingItems.slice(0, 4).map(item => (
+              <ScrollView
+                style={n.itemScroll}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
+                {pendingItems.map(item => (
                   <View key={item.id} style={n.itemRow}>
                     <View style={[n.itemDot, { backgroundColor: C.compra }]} />
                     <Text style={n.itemName} numberOfLines={1}>
                       {item.name}
-                      {item.quantity ? <Text style={n.itemUnit}>  {item.quantity}{item.unit ? ` ${item.unit}` : ''}</Text> : null}
+                      {item.unit ? <Text style={n.itemUnit}>  {item.unit}</Text> : null}
                     </Text>
                   </View>
                 ))}
-                {pendingItems.length > 4 && (
-                  <Text style={[n.itemMore, { color: C.compra }]}>+ {pendingItems.length - 4} más</Text>
-                )}
-              </>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -497,11 +499,11 @@ const n = StyleSheet.create({
   badge: { borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
   badgeText: { color: C.white, fontSize: 11, fontWeight: '700', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
+  itemScroll: { maxHeight: 72 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   itemDot: { width: 6, height: 6, borderRadius: 3 },
   itemName: { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT, fontWeight: '500' },
   itemUnit: { fontSize: 12, color: C.ink2, fontWeight: '400' },
-  itemMore: { fontSize: 12, fontFamily: FONT, fontWeight: '600', marginTop: 4 },
 
   // Próximos pagos
   pagosCard: {
