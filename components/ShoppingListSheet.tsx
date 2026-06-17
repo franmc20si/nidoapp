@@ -63,6 +63,9 @@ interface ShoppingItem {
 }
 
 // ─── AsyncStorage helpers ─────────────────────────────────────────────────────
+// keyChecked es ahora SOLO legado: el estado "comprado" de los ingredientes de
+// receta vive en Supabase (tabla shopping_checks). loadChecked se conserva para
+// la migración única que sube ese estado local antiguo a la nube.
 const keyChecked = (wk: string) => `nido_shop_checked_${wk}`;
 const keyManual  = (wk: string) => `nido_shop_manual_${wk}`;
 
@@ -72,9 +75,19 @@ async function loadChecked(wk: string): Promise<Set<string>> {
     return new Set(raw ? JSON.parse(raw) : []);
   } catch { return new Set(); }
 }
-async function saveChecked(wk: string, ids: Set<string>) {
-  try { await AsyncStorage.setItem(keyChecked(wk), JSON.stringify([...ids])); } catch {}
+
+// Marcas de ingredientes de receta compradas, desde Supabase (sincronizadas).
+async function loadRecipeChecks(householdId: string, wk: string): Promise<Set<string>> {
+  try {
+    const { data } = await supabase
+      .from('shopping_checks')
+      .select('item_key')
+      .eq('household_id', householdId)
+      .eq('week_key', wk);
+    return new Set((data ?? []).map((r: any) => r.item_key));
+  } catch { return new Set(); }
 }
+
 async function loadManual(wk: string): Promise<ManualItem[]> {
   try {
     const raw = await AsyncStorage.getItem(keyManual(wk));
@@ -111,7 +124,28 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   useEffect(() => {
     if (!visible || !householdId) return;
     (async () => {
-      const recipeChecked = await loadChecked(weekKey);
+      // Estado "comprado" de los ingredientes de receta: ahora en Supabase
+      // (shopping_checks) para que sincronice entre dispositivos. Migración única
+      // por semana: subimos lo que aún viviera en AsyncStorage (device-local).
+      const recipeChecked = await loadRecipeChecks(householdId, weekKey);
+      const migKey   = `nido_shop_checks_migrated_${weekKey}`;
+      const migrated = await AsyncStorage.getItem(migKey);
+      if (!migrated) {
+        const legacy   = await loadChecked(weekKey);
+        const legacyRi = [...legacy].filter(k => k.startsWith('ri-') && !recipeChecked.has(k));
+        let migOk = true;
+        if (legacyRi.length > 0) {
+          // Si la tabla aún no existe (SQL no ejecutado), upsert devuelve error:
+          // NO marcamos la migración como hecha para que reintente más adelante.
+          const { error } = await supabase.from('shopping_checks').upsert(
+            legacyRi.map(item_key => ({ household_id: householdId, week_key: weekKey, item_key })),
+            { onConflict: 'household_id,week_key,item_key' }
+          );
+          if (error) migOk = false;
+          else legacyRi.forEach(k => recipeChecked.add(k));
+        }
+        if (migOk) await AsyncStorage.setItem(migKey, '1');
+      }
       setChecked(recipeChecked);
 
       // Get or create the shopping_list record for this week
@@ -178,20 +212,32 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
     })();
   }, [visible, weekKey, householdId]);
 
-  // Toggle checked: recipe items → AsyncStorage, manual items → Supabase
+  // Toggle checked: ambas fuentes en Supabase (sincronizado entre dispositivos).
+  //   recipe items (ri-…) → tabla shopping_checks
+  //   manual items        → shopping_items.is_checked
   const toggleChecked = useCallback((id: string) => {
     setChecked(prev => {
       const willBeChecked = !prev.has(id);
       const next = new Set(prev);
       if (willBeChecked) next.add(id); else next.delete(id);
       if (id.startsWith('ri-')) {
-        saveChecked(weekKey, next);
+        if (willBeChecked) {
+          supabase.from('shopping_checks').upsert(
+            { household_id: householdId, week_key: weekKey, item_key: id },
+            { onConflict: 'household_id,week_key,item_key' }
+          ).then(() => {});
+        } else {
+          supabase.from('shopping_checks').delete()
+            .eq('household_id', householdId)
+            .eq('week_key', weekKey)
+            .eq('item_key', id).then(() => {});
+        }
       } else if (listIdRef.current) {
         supabase.from('shopping_items').update({ is_checked: willBeChecked }).eq('id', id);
       }
       return next;
     });
-  }, [weekKey]);
+  }, [weekKey, householdId]);
 
   // Add manual item — sync to Supabase
   const addManual = async () => {
@@ -215,7 +261,7 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   // Remove manual item — sync to Supabase
   const removeManual = async (id: string) => {
     setManualItems(prev => prev.filter(m => m.id !== id));
-    setChecked(prev => { const next = new Set(prev); next.delete(id); saveChecked(weekKey, next); return next; });
+    setChecked(prev => { const next = new Set(prev); next.delete(id); return next; });
     if (listIdRef.current) {
       await supabase.from('shopping_items').delete().eq('id', id);
     }

@@ -9,7 +9,6 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useMenuStore } from '@/store/menuStore';
 import { weekKey } from '@/lib/week';
 import { supabase } from '@/lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Task, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
@@ -154,17 +153,22 @@ export default function HoyScreen() {
   // ── Falta por comprar ─────────────────────────────────────────────────────
   // La lista de la compra mezcla dos fuentes (igual que ShoppingListSheet):
   //   1. Ingredientes de las recetas del menú de la semana — su estado "comprado"
-  //      vive en AsyncStorage (clave nido_shop_checked_<wk>), ids "ri-...".
+  //      vive en Supabase (tabla shopping_checks), ids "ri-...".
   //   2. Productos añadidos a mano — viven en shopping_items (Supabase).
   // Esta función carga ambas fuentes; el merge final se calcula en render.
   const fetchShopping = async () => {
     if (!household) return;
     const wk = weekKey(new Date());
 
-    // 1. Estado "comprado" de los ingredientes de receta (device-local)
+    // 1. Estado "comprado" de los ingredientes de receta (Supabase, sincronizado)
     try {
-      const raw = await AsyncStorage.getItem(`nido_shop_checked_${wk}`);
-      setRecipeChecked(new Set(raw ? JSON.parse(raw) : []));
+      const { data } = await withTimeout(
+        supabase.from('shopping_checks')
+          .select('item_key')
+          .eq('household_id', household.id)
+          .eq('week_key', wk)
+      );
+      setRecipeChecked(new Set((data ?? []).map((r: any) => r.item_key)));
     } catch { setRecipeChecked(new Set()); }
 
     // 2. Productos manuales sin comprar (Supabase)
