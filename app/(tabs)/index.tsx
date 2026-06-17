@@ -560,8 +560,9 @@ const n = StyleSheet.create({
   },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   cardLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontFamily: FONT, fontWeight: '600' },
-  badge: { borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2, minWidth: 22, alignItems: 'center' },
-  badgeText: { color: C.white, fontSize: 11, fontWeight: '700', fontFamily: FONT },
+  // Mismo tamaño que el círculo del día de la semana (weekNum: 34×34, texto 14)
+  badge: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: C.white, fontSize: 14, fontWeight: '600', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
   itemScroll: { maxHeight: 88 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 7 },

@@ -253,11 +253,14 @@ function CustomTabBar({ state, navigation }: any) {
               {isCenter ? (
                 <View style={[tb.centerPill, { backgroundColor: focused ? accent.hex + '22' : C.paperDeep }]}>
                   {Icon && <Icon active={focused} accent={accent.hex} />}
+                  <Text style={[tb.tabLabel, { color: focused ? accent.hex : C.ink3 }]}>{tab.label}</Text>
                 </View>
               ) : (
-                Icon && <Icon active={focused} accent={accent.hex} />
+                <>
+                  {Icon && <Icon active={focused} accent={accent.hex} />}
+                  <Text style={[tb.tabLabel, { color: focused ? accent.hex : C.ink3 }]}>{tab.label}</Text>
+                </>
               )}
-              <Text style={[tb.tabLabel, { color: focused ? accent.hex : C.ink3 }]}>{tab.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -294,7 +297,10 @@ const tb = StyleSheet.create({
     alignItems: 'flex-end',
   },
   tab: { flex: 1, alignItems: 'center', gap: 4 },
-  centerPill: { width: 52, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  // Resalte de la tab central: envuelve icono + palabra. El paddingVertical 6
+  // simétrico + marginBottom -6 hace que el contenido quede alineado con las
+  // demás tabs (que usan flex-end) mientras el fondo se extiende centrado.
+  centerPill: { alignItems: 'center', gap: 4, paddingTop: 6, paddingBottom: 6, paddingHorizontal: 14, borderRadius: R.l, marginBottom: -6 },
   ico: { fontSize: 22, opacity: 0.35 },
   icoOn: { opacity: 1 },
   tabLabel: { fontSize: 10, fontFamily: FONT, fontWeight: '500' },
