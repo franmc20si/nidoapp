@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  Modal, ScrollView, StyleSheet, ActivityIndicator, Alert,
+  ScrollView, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { NIDO_COLORS } from '@/constants/nidoColors';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
+import BottomSheet from '@/components/BottomSheet';
+import PressScale from '@/components/PressScale';
 
 interface Props {
   visible: boolean;
@@ -110,10 +112,7 @@ export default function NidoSheet({ visible, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={sh.scrim} activeOpacity={1} onPress={onClose} />
-      <View style={sh.sheet}>
-        <View style={sh.grab} />
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '90%' }}>
         <ScrollView
           style={sh.scroll}
           contentContainerStyle={sh.body}
@@ -142,7 +141,7 @@ export default function NidoSheet({ visible, onClose }: Props) {
                   returnKeyType="done"
                   onSubmitEditing={saveName}
                 />
-                <TouchableOpacity
+                <PressScale
                   style={[sh.saveBtn, { backgroundColor: accent.hex }, (!editName.trim() || saving) && sh.saveBtnDim]}
                   onPress={saveName}
                   disabled={!editName.trim() || saving}
@@ -150,7 +149,7 @@ export default function NidoSheet({ visible, onClose }: Props) {
                   {saving
                     ? <ActivityIndicator color={C.white} size="small" />
                     : <Text style={sh.saveBtnText}>Guardar</Text>}
-                </TouchableOpacity>
+                </PressScale>
               </View>
 
               {/* Color picker */}
@@ -159,14 +158,14 @@ export default function NidoSheet({ visible, onClose }: Props) {
                 {NIDO_COLORS.map((nc) => {
                   const on = accentKey === nc.key;
                   return (
-                    <TouchableOpacity
+                    <PressScale
                       key={nc.key}
+                      scaleTo={0.9}
                       style={[sh.swatch, { backgroundColor: nc.hex }, on && sh.swatchOn]}
                       onPress={() => handleColorChange(nc.key)}
-                      activeOpacity={0.8}
                     >
                       {on && <Text style={sh.swatchCheck}>✓</Text>}
-                    </TouchableOpacity>
+                    </PressScale>
                   );
                 })}
               </View>
@@ -206,28 +205,28 @@ export default function NidoSheet({ visible, onClose }: Props) {
                   {allHouseholds.map((h) => {
                     const active = h.id === household?.id;
                     return (
-                      <TouchableOpacity
+                      <PressScale
                         key={h.id}
+                        scaleTo={0.98}
                         style={[sh.nidoRow, active && { borderColor: accent.hex }]}
                         onPress={() => switchHousehold(h)}
-                        activeOpacity={0.8}
                       >
                         <Text style={sh.nidoRowNest}>🪺</Text>
                         <Text style={[sh.nidoRowName, active && { color: accent.hex }]}>{h.name}</Text>
                         {active && <Text style={[sh.nidoRowCheck, { color: accent.hex }]}>✓</Text>}
-                      </TouchableOpacity>
+                      </PressScale>
                     );
                   })}
                 </>
               )}
 
               {/* Add another nido */}
-              <TouchableOpacity style={sh.addBtn} onPress={() => setShowAdd(true)} activeOpacity={0.8}>
+              <PressScale scaleTo={0.98} style={sh.addBtn} onPress={() => setShowAdd(true)}>
                 <View style={[sh.addIcon, { backgroundColor: accent.wash }]}>
                   <Text style={[sh.addIconText, { color: accent.hex }]}>+</Text>
                 </View>
                 <Text style={sh.addText}>Añadir otro nido</Text>
-              </TouchableOpacity>
+              </PressScale>
             </>
           ) : (
             <>
@@ -253,19 +252,19 @@ export default function NidoSheet({ visible, onClose }: Props) {
                 {NIDO_COLORS.map((nc) => {
                   const on = newColorKey === nc.key;
                   return (
-                    <TouchableOpacity
+                    <PressScale
                       key={nc.key}
+                      scaleTo={0.9}
                       style={[sh.swatch, { backgroundColor: nc.hex }, on && sh.swatchOn]}
                       onPress={() => setNewColorKey(nc.key)}
-                      activeOpacity={0.8}
                     >
                       {on && <Text style={sh.swatchCheck}>✓</Text>}
-                    </TouchableOpacity>
+                    </PressScale>
                   );
                 })}
               </View>
 
-              <TouchableOpacity
+              <PressScale
                 style={[sh.createBtn, { backgroundColor: NIDO_COLORS.find(c => c.key === newColorKey)?.hex ?? C.brand }, (!newName.trim() || adding) && sh.saveBtnDim]}
                 onPress={createNido}
                 disabled={!newName.trim() || adding}
@@ -273,21 +272,17 @@ export default function NidoSheet({ visible, onClose }: Props) {
                 {adding
                   ? <ActivityIndicator color={C.white} />
                   : <Text style={sh.createBtnText}>Crear nido</Text>}
-              </TouchableOpacity>
+              </PressScale>
             </>
           )}
 
           <View style={{ height: 16 }} />
         </ScrollView>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const sh = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '90%' },
-  grab:  { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
   scroll: { maxHeight: 600 },
   body:  { padding: 22, paddingTop: 8, paddingBottom: 0 },
 

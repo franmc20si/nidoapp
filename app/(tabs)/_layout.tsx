@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Tabs } from 'expo-router';
 import {
-  View, Text, TouchableOpacity, Modal, TextInput, StyleSheet,
-  ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform,
+  View, Text, TouchableOpacity, TextInput, StyleSheet,
+  ActivityIndicator, ScrollView,
 } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { CATS } from '@/constants/categories';
@@ -18,6 +18,8 @@ import {
   IconCalendar as IcoCalendar, getCatIcon,
 } from '@/components/icons';
 import { ToastBar } from '@/components/ToastBar';
+import PressScale from '@/components/PressScale';
+import BottomSheet from '@/components/BottomSheet';
 
 function IconHome({ active, accent }: { active: boolean; accent: string }) {
   return <IcoHome size={22} color={active ? accent : C.ink3} fill="transparent" strokeWidth={active ? 2.6 : 2} />;
@@ -100,25 +102,21 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <TouchableOpacity style={tb.scrim} activeOpacity={1} onPress={handleClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={tb.sheet}>
-          <View style={tb.grab} />
-          <ScrollView style={tb.sheetScroll} contentContainerStyle={tb.sheetBody} keyboardShouldPersistTaps="handled">
+    <BottomSheet visible={visible} onClose={handleClose}>
+      <ScrollView style={tb.sheetScroll} contentContainerStyle={tb.sheetBody} keyboardShouldPersistTaps="handled">
             {/* Segmented control */}
             <View style={tb.seg}>
               {(['regular', 'puntual'] as const).map((k) => (
-                <TouchableOpacity
+                <PressScale
                   key={k}
+                  scaleTo={0.96}
                   style={[tb.segItem, kind === k && tb.segItemOn]}
                   onPress={() => setKind(k)}
-                  activeOpacity={0.8}
                 >
                   <Text style={[tb.segText, kind === k && tb.segTextOn]}>
                     {k === 'regular' ? 'Regular' : 'Puntual'}
                   </Text>
-                </TouchableOpacity>
+                </PressScale>
               ))}
             </View>
 
@@ -133,18 +131,18 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
               {CATS.map((cat) => {
                 const on = category === cat.key;
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={cat.key}
+                    scaleTo={0.94}
                     style={[tb.catChip, { backgroundColor: cat.tint, borderColor: on ? cat.color : 'transparent' }]}
                     onPress={() => {
                       setCategory(cat.key);
                       if (!title.trim()) setTitle(cat.label);
                     }}
-                    activeOpacity={0.85}
                   >
                     {(() => { const Icon = getCatIcon(cat.key); return <Icon size={17} color={cat.color} fill={cat.tint} strokeWidth={2.4} />; })()}
                     <Text style={[tb.catText, { color: cat.color }]}>{cat.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </ScrollView>
@@ -164,14 +162,14 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
               {TIMES.map((t) => {
                 const on = min === t.min;
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={t.min}
+                    scaleTo={0.94}
                     style={[tb.timePill, on && tb.timePillOn]}
                     onPress={() => setMin(t.min)}
-                    activeOpacity={0.8}
                   >
                     <Text style={[tb.timeText, on && tb.timeTextOn]}>{t.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </View>
@@ -189,15 +187,15 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
                   {RECURRENCE_OPTS.map((opt) => {
                     const on = recRule === opt.key;
                     return (
-                      <TouchableOpacity
+                      <PressScale
                         key={opt.key}
+                        scaleTo={0.94}
                         style={[tb.recPill, on && { backgroundColor: accent.hex, borderColor: accent.hex }]}
                         onPress={() => setRecRule(opt.key)}
-                        activeOpacity={0.8}
                       >
                         <Text style={[tb.recText, on && tb.recTextOn]}>{opt.label}</Text>
                         <Text style={[tb.recSub, on && { color: C.white + 'CC' }]}>{opt.short}</Text>
-                      </TouchableOpacity>
+                      </PressScale>
                     );
                   })}
                 </ScrollView>
@@ -212,13 +210,11 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
 
             {/* Save */}
             {saveError ? <Text style={tb.errorText}>{saveError}</Text> : null}
-            <TouchableOpacity style={[tb.save, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={handleAdd} disabled={saving} activeOpacity={0.85}>
+            <PressScale style={[tb.save, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={handleAdd} disabled={saving}>
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={tb.saveText}>Añadir al nido</Text>}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+            </PressScale>
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -306,10 +302,7 @@ const tb = StyleSheet.create({
   tabLabel: { fontSize: 10, fontFamily: FONT, fontWeight: '500' },
 
   // Sheet
-  scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '88%' },
   sheetScroll: { },
-  grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
   sheetBody: { padding: 22, paddingBottom: 40 },
 
   seg: { flexDirection: 'row', backgroundColor: C.paperDeep, borderRadius: R.pill, padding: 4, marginBottom: 22 },

@@ -6,12 +6,14 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, ScrollView,
+  View, Text, TouchableOpacity, ScrollView,
   StyleSheet, TextInput, Animated, useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import BottomSheet from '@/components/BottomSheet';
+import PressScale from '@/components/PressScale';
 
 function genId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -299,11 +301,7 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   const doneQty = allItems.filter(i => i.checked).length;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={sl.scrim} activeOpacity={1} onPress={onClose} />
-      <View style={sl.sheet}>
-        <View style={sl.grab} />
-
+    <BottomSheet visible={visible} onClose={onClose}>
         {/* Header */}
         <View style={sl.header}>
           <View style={{ flex: 1 }}>
@@ -350,11 +348,11 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
                 <Text style={sl.sectionCount}>{items.filter(i => i.checked).length}/{items.length}</Text>
               </View>
               {items.map(item => (
-                <TouchableOpacity
+                <PressScale
                   key={item.id}
+                  scaleTo={0.98}
                   style={[sl.item, item.checked && sl.itemDone]}
                   onPress={() => toggleChecked(item.id)}
-                  activeOpacity={0.7}
                 >
                   {/* Checkbox */}
                   <View style={[sl.check, item.checked && { backgroundColor: accent.hex, borderColor: accent.hex }]}>
@@ -379,7 +377,7 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
                       <Text style={sl.deleteBtnText}>✕</Text>
                     </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                </PressScale>
               ))}
             </View>
           ))}
@@ -392,8 +390,9 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
               {/* Category pills */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sl.catPills}>
                 {GROCERY_CATS.map(c => (
-                  <TouchableOpacity
+                  <PressScale
                     key={c.key}
+                    scaleTo={0.94}
                     style={[sl.catPill, addCat === c.key && { backgroundColor: accent.hex, borderColor: accent.hex }]}
                     onPress={() => setAddCat(c.key)}
                   >
@@ -401,7 +400,7 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
                     <Text style={[sl.catPillText, addCat === c.key && { color: C.white }]}>
                       {c.label.split(' ')[0]}
                     </Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 ))}
               </ScrollView>
 
@@ -421,37 +420,32 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
                   value={addAmount}
                   onChangeText={setAddAmount}
                 />
-                <TouchableOpacity
+                <PressScale
                   style={[sl.addBtn, { backgroundColor: accent.hex }, !addName.trim() && { opacity: 0.4 }]}
                   onPress={addManual}
                   disabled={!addName.trim()}
                 >
                   <Text style={sl.addBtnText}>Añadir</Text>
-                </TouchableOpacity>
+                </PressScale>
               </View>
               <TouchableOpacity onPress={() => { setShowAdd(false); setAddName(''); setAddAmount(''); }}>
                 <Text style={sl.cancelText}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={[sl.addProductBtn, { borderColor: accent.hex + '60' }]} onPress={() => setShowAdd(true)}>
+            <PressScale style={[sl.addProductBtn, { borderColor: accent.hex + '60' }]} onPress={() => setShowAdd(true)}>
               <Text style={[sl.addProductBtnText, { color: accent.hex }]}>+ Añadir producto</Text>
-            </TouchableOpacity>
+            </PressScale>
           )}
 
           <View style={{ height: 32 }} />
         </ScrollView>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const sl = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl },
-  grab:  { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
-
   header:      { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 22, paddingTop: 10, paddingBottom: 4 },
   eyebrow:     { fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: C.ink3, fontFamily: FONT, fontWeight: '500', marginBottom: 2 },
   title:       { fontSize: 22, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.4 },

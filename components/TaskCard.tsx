@@ -1,11 +1,14 @@
 import { useRef } from 'react';
-import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Animated, View, Text, Pressable, Easing, StyleSheet } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { catFor } from '@/constants/categories';
 import { taskTheme, fmtDur } from '@/lib/taskTheme';
 import { recurrenceLabel } from '@/lib/recurrence';
 import { getCatIcon, IconCheck } from '@/components/icons';
 import { Task } from '@/types';
+
+// Strong ease-out (Emil): starts fast, feels responsive on exit.
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -34,14 +37,21 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
 
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const checkScale = useRef(new Animated.Value(1)).current;
+
+  // Subtle press feedback — buttons must feel like they hear the tap.
+  const spring = (val: Animated.Value, toValue: number) =>
+    Animated.spring(val, { toValue, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
 
   const handlePress = () => {
     // toggling to done → animate out, then notify parent to remove
     if (!task.is_done && onAnimatedOut) {
       onToggle(task);
       Animated.parallel([
-        Animated.timing(translateX, { toValue: 60, duration: 620, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 620, useNativeDriver: true }),
+        Animated.timing(translateX, { toValue: 90, duration: 360, easing: EASE_OUT, useNativeDriver: true }),
+        Animated.timing(cardScale, { toValue: 0.97, duration: 360, easing: EASE_OUT, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 300, easing: EASE_OUT, useNativeDriver: true }),
       ]).start(() => onAnimatedOut(task));
     } else {
       onToggle(task);
@@ -52,11 +62,16 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
     <Animated.View
       style={[
         s.card,
-        { backgroundColor: th.bg, borderColor: th.border, transform: [{ translateX }], opacity },
+        { backgroundColor: th.bg, borderColor: th.border, transform: [{ translateX }, { scale: cardScale }], opacity },
         task.is_done && s.done,
       ]}
     >
-      <TouchableOpacity style={s.row} onPress={() => onPress?.(task)} activeOpacity={onPress ? 0.7 : 1}>
+      <Pressable
+        style={s.row}
+        onPress={() => onPress?.(task)}
+        onPressIn={() => onPress && spring(cardScale, 0.985)}
+        onPressOut={() => onPress && spring(cardScale, 1)}
+      >
         <View style={[s.icon, { backgroundColor: th.chip }]}>
           <CatIcon size={20} color={th.mark} fill={th.bg} strokeWidth={2.4} />
         </View>
@@ -84,14 +99,19 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
             </Text>
           ) : null}
         </View>
-        <TouchableOpacity
-          style={[s.check, { borderColor: th.mark }, task.is_done && { backgroundColor: th.mark }]}
+        <Pressable
           onPress={handlePress}
-          activeOpacity={0.7}
+          onPressIn={() => spring(checkScale, 0.88)}
+          onPressOut={() => spring(checkScale, 1)}
+          hitSlop={10}
         >
-          {task.is_done && <IconCheck size={14} color={C.white} strokeWidth={3} />}
-        </TouchableOpacity>
-      </TouchableOpacity>
+          <Animated.View
+            style={[s.check, { borderColor: th.mark, transform: [{ scale: checkScale }] }, task.is_done && { backgroundColor: th.mark }]}
+          >
+            {task.is_done && <IconCheck size={14} color={C.white} strokeWidth={3} />}
+          </Animated.View>
+        </Pressable>
+      </Pressable>
     </Animated.View>
   );
 }

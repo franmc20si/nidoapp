@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Task } from '@/types';
 import { C, R, FONT } from '@/constants/theme';
 import TaskCard from '@/components/TaskCard';
+import StaggerItem from '@/components/StaggerItem';
 import { AlertCards } from '@/components/AlertSystem';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
@@ -259,14 +260,15 @@ export default function NidoScreen() {
               <Text style={s.emptySub}>Añade tareas con el botón de abajo</Text>
             </View>
           )}
-          {shown.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onToggle={toggleTask}
-              onPress={setEditingTask}
-              completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
-            />
+          {shown.map((task, i) => (
+            <StaggerItem key={task.id} index={i}>
+              <TaskCard
+                task={task}
+                onToggle={toggleTask}
+                onPress={setEditingTask}
+                completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
+              />
+            </StaggerItem>
           ))}
 
           {/* Add task button (ob-opt style) */}

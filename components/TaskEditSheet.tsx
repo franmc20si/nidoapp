@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal, View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  View, Text, TextInput, ScrollView,
+  StyleSheet, ActivityIndicator, Platform, Alert,
 } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { CATS } from '@/constants/categories';
@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabase';
 import { getCatIcon } from '@/components/icons';
 import { Task } from '@/types';
 import { withTimeout } from '@/lib/withTimeout';
+import PressScale from '@/components/PressScale';
+import BottomSheet from '@/components/BottomSheet';
 
 const TIMES = [
   { label: '15 min', min: 15 },
@@ -121,20 +123,16 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
   if (!task) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.scrim} activeOpacity={1} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={s.sheet}>
-          <View style={s.grab} />
+    <BottomSheet visible={visible} onClose={onClose}>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
 
             <View style={s.headerRow}>
               <Text style={s.sheetTitle}>Editar tarea</Text>
-              <TouchableOpacity onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
+              <PressScale onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
                 {deleting
                   ? <ActivityIndicator size="small" color="#c0392b" />
                   : <Text style={s.deleteBtnText}>Eliminar</Text>}
-              </TouchableOpacity>
+              </PressScale>
             </View>
 
             {/* Tipo */}
@@ -142,9 +140,9 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
               {(['regular', 'puntual'] as const).map((k) => {
                 const on = (k === 'regular') === isRec;
                 return (
-                  <TouchableOpacity key={k} style={[s.segItem, on && s.segItemOn]} onPress={() => setIsRec(k === 'regular')} activeOpacity={0.8}>
+                  <PressScale key={k} scaleTo={0.96} style={[s.segItem, on && s.segItemOn]} onPress={() => setIsRec(k === 'regular')}>
                     <Text style={[s.segText, on && s.segTextOn]}>{k === 'regular' ? 'Regular' : 'Puntual'}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </View>
@@ -156,15 +154,15 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
                 const on = category === cat.key;
                 const Icon = getCatIcon(cat.key);
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={cat.key}
+                    scaleTo={0.94}
                     style={[s.catChip, { backgroundColor: cat.tint, borderColor: on ? cat.color : 'transparent' }]}
                     onPress={() => setCategory(on ? null : cat.key)}
-                    activeOpacity={0.85}
                   >
                     <Icon size={17} color={cat.color} fill={cat.tint} strokeWidth={2.4} />
                     <Text style={[s.catText, { color: cat.color }]}>{cat.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </ScrollView>
@@ -184,9 +182,9 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
               {TIMES.map((t) => {
                 const on = min === t.min;
                 return (
-                  <TouchableOpacity key={t.min} style={[s.timePill, on && s.timePillOn]} onPress={() => setMin(t.min)} activeOpacity={0.8}>
+                  <PressScale key={t.min} scaleTo={0.94} style={[s.timePill, on && s.timePillOn]} onPress={() => setMin(t.min)}>
                     <Text style={[s.timeText, on && s.timeTextOn]}>{t.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </View>
@@ -199,15 +197,15 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
                   {RECURRENCE_OPTS.map((opt) => {
                     const on = recRule === opt.key;
                     return (
-                      <TouchableOpacity
+                      <PressScale
                         key={opt.key}
+                        scaleTo={0.94}
                         style={[s.recPill, on && { backgroundColor: accent.hex, borderColor: accent.hex }]}
                         onPress={() => setRecRule(opt.key)}
-                        activeOpacity={0.8}
                       >
                         <Text style={[s.recText, on && s.recTextOn]}>{opt.label}</Text>
                         <Text style={[s.recSub, on && { color: C.white + 'CC' }]}>{opt.short}</Text>
-                      </TouchableOpacity>
+                      </PressScale>
                     );
                   })}
                 </ScrollView>
@@ -222,26 +220,20 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
 
             {error ? <Text style={s.error}>{error}</Text> : null}
 
-            <TouchableOpacity
+            <PressScale
               style={[s.save, { backgroundColor: accent.hex }, (!title.trim() || saving) && s.saveDim]}
               onPress={handleSave}
               disabled={saving || !title.trim()}
-              activeOpacity={0.85}
             >
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={s.saveText}>Guardar cambios</Text>}
-            </TouchableOpacity>
+            </PressScale>
 
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  scrim:      { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet:      { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '88%' },
-  grab:       { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
   scroll:     {},
   body:       { padding: 22, paddingBottom: 40 },
 

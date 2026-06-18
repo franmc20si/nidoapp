@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { Task, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
+import StaggerItem from '@/components/StaggerItem';
 import { isDueAgain, nextDueDate } from '@/lib/recurrence';
 import { withTimeout } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
@@ -390,6 +391,7 @@ export default function HoyScreen() {
           const comida = recipeById(todayComida);
           const cena   = recipeById(todayCena);
           return (
+            <StaggerItem index={0}>
             <View style={n.menuCard}>
               <Text style={n.menuLabel}>MENÚ DE HOY</Text>
               <View style={n.menuCols}>
@@ -407,10 +409,12 @@ export default function HoyScreen() {
                 </View>
               </View>
             </View>
+            </StaggerItem>
           );
         })()}
 
         {/* Tu nido esta semana */}
+        <StaggerItem index={1}>
         <View style={[n.nestHero, { backgroundColor: accent.wash, borderColor: accent.hex + '28' }]}>
           <View style={n.nestHeroRow}>
             <Text style={n.nestLabel}>TU NIDO ESTA SEMANA</Text>
@@ -425,8 +429,10 @@ export default function HoyScreen() {
             <View style={[n.nestBarFill, { width: `${pct}%` as any, backgroundColor: accent.hex }]} />
           </View>
         </View>
+        </StaggerItem>
 
         {/* Falta por comprar */}
+        <StaggerItem index={2}>
         <View style={n.sectionGap}>
           <View style={n.compraCard}>
             <View style={n.cardHeaderRow}>
@@ -463,8 +469,10 @@ export default function HoyScreen() {
             )}
           </View>
         </View>
+        </StaggerItem>
 
         {/* Próximos pagos */}
+        <StaggerItem index={3}>
         <View style={n.sectionGap}>
           <View style={n.pagosCard}>
             <Text style={[n.cardLabel, { color: C.suelo }]}>PRÓXIMOS PAGOS</Text>
@@ -491,6 +499,7 @@ export default function HoyScreen() {
             )}
           </View>
         </View>
+        </StaggerItem>
 
       </ScrollView>
     </SafeAreaView>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
-  Modal, View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
+  View, Text, TextInput, ScrollView,
+  StyleSheet, ActivityIndicator, Platform, Alert,
 } from 'react-native';
+import BottomSheet from '@/components/BottomSheet';
+import PressScale from '@/components/PressScale';
 import { C, R, FONT } from '@/constants/theme';
 import { SERVICE_CATS, CYCLES } from '@/constants/services';
 import { useNidoStore } from '@/store/nidoStore';
@@ -155,21 +157,17 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.scrim} activeOpacity={1} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={s.sheet}>
-          <View style={s.grab} />
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '90%' }}>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
 
             <View style={s.headerRow}>
               <Text style={s.sheetTitle}>{isEdit ? 'Editar servicio' : 'Nuevo servicio'}</Text>
               {isEdit && (
-                <TouchableOpacity onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
+                <PressScale onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
                   {deleting
                     ? <ActivityIndicator size="small" color="#c0392b" />
                     : <Text style={s.deleteBtnText}>Eliminar</Text>}
-                </TouchableOpacity>
+                </PressScale>
               )}
             </View>
 
@@ -179,15 +177,15 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               {SERVICE_CATS.map((cat) => {
                 const on = category === cat.key;
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={cat.key}
+                    scaleTo={0.94}
                     style={[s.catChip, { backgroundColor: cat.tint, borderColor: on ? cat.color : 'transparent' }]}
                     onPress={() => setCategory(cat.key)}
-                    activeOpacity={0.85}
                   >
                     <Text style={s.catEmoji}>{cat.emoji}</Text>
                     <Text style={[s.catText, { color: cat.color }]}>{cat.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </ScrollView>
@@ -221,14 +219,14 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               {CYCLES.map((c) => {
                 const on = cycle === c.key;
                 return (
-                  <TouchableOpacity
+                  <PressScale
                     key={c.key}
+                    scaleTo={0.94}
                     style={[s.cyclePill, on && { backgroundColor: accent.hex, borderColor: accent.hex }]}
                     onPress={() => setCycle(c.key)}
-                    activeOpacity={0.8}
                   >
                     <Text style={[s.cycleText, on && { color: C.white }]}>{c.label}</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 );
               })}
             </ScrollView>
@@ -257,26 +255,20 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
 
             {error ? <Text style={s.error}>{error}</Text> : null}
 
-            <TouchableOpacity
+            <PressScale
               style={[s.save, { backgroundColor: accent.hex }, saving && s.saveDim]}
               onPress={handleSave}
               disabled={saving}
-              activeOpacity={0.85}
             >
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={s.saveText}>{isEdit ? 'Guardar cambios' : 'Añadir servicio'}</Text>}
-            </TouchableOpacity>
+            </PressScale>
 
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  scrim:      { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet:      { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '90%' },
-  grab:       { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
   scroll:     {},
   body:       { padding: 22, paddingBottom: 40 },
 
