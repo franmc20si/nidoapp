@@ -17,6 +17,43 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // On native use AsyncStorage for persistence.
 const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
 
+// ── Lock de Auth con timeout (evita el deadlock de Web Locks en web) ──────────
+// El lock por defecto de supabase-js en web (navigatorLock) espera de forma
+// INDEFINIDA a adquirir el Web Lock antes de refrescar el token. Si otra pestaña
+// (o un contexto que se cerró mal) dejó el lock retenido, cada petición que
+// necesita la sesión se cuelga para siempre → "se queda pensando" → TIMEOUT, y
+// nada se guarda. Esto sustituye ese lock por uno que abandona tras unos segundos
+// y, antes que colgar, ejecuta la operación sin lock (a lo sumo un refresh de
+// token duplicado, inofensivo). Coordina entre pestañas en el caso normal.
+const LOCK_ACQUIRE_TIMEOUT = 8000;
+
+async function webLockWithTimeout<R>(
+  name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> {
+  // Sin Web Locks API (navegadores antiguos / RN): nada que coordinar.
+  if (typeof navigator === 'undefined' || !navigator.locks?.request) {
+    return fn();
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), LOCK_ACQUIRE_TIMEOUT);
+  try {
+    return await navigator.locks.request(
+      `lock:${name}`,
+      { mode: 'exclusive', signal: ctrl.signal },
+      async () => fn(),
+    );
+  } catch (e: any) {
+    // AbortError = no se pudo adquirir el lock a tiempo (otro contexto lo
+    // retiene atascado). En vez de colgar la petición, seguimos sin lock.
+    if (e?.name === 'AbortError') return fn();
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage,
@@ -24,5 +61,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'implicit',
+    lock: webLockWithTimeout,
   },
 });
