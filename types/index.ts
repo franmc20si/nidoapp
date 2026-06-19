@@ -71,6 +71,15 @@ export interface Expense {
   created_at: string;
 }
 
+export interface Bank {
+  id: string;
+  household_id: string;
+  name: string;
+  color: string;            // clave de NIDO_COLORS (teja | terracota | cielo | bosque | iris)
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Subscription {
   id: string;
   household_id: string;
@@ -79,7 +88,8 @@ export interface Subscription {
   amount: number;
   cycle: string;            // monthly | bimonthly | quarterly | semiannual | yearly
   next_payment: string | null;
-  bank_account: string | null;
+  bank_account: string | null; // texto libre heredado (reemplazado por bank_id)
+  bank_id: string | null;      // banco asignado → tabla banks
   created_by: string | null;
   created_at: string;
 }

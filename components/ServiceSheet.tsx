@@ -4,11 +4,14 @@ import {
   StyleSheet, ActivityIndicator, Platform, Alert,
 } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
+import BankSheet from '@/components/BankSheet';
 import PressScale from '@/components/PressScale';
 import { C, R, FONT } from '@/constants/theme';
 import { SERVICE_CATS, CYCLES } from '@/constants/services';
+import { nidoColorByKey } from '@/constants/nidoColors';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
+import { useBanksStore } from '@/store/banksStore';
 import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
 import { withTimeout } from '@/lib/withTimeout';
@@ -46,13 +49,15 @@ interface Props {
 export default function ServiceSheet({ service, visible, onClose, onSaved, onDeleted }: Props) {
   const { accent } = useNidoStore();
   const { household, user } = useAuthStore();
+  const { banks, loadBanks } = useBanksStore();
 
   const [name,     setName]     = useState('');
   const [category, setCategory] = useState<string | null>('luz');
   const [amount,   setAmount]   = useState('');
   const [cycle,    setCycle]    = useState('monthly');
   const [dateText, setDateText] = useState('');
-  const [bank,     setBank]     = useState('');
+  const [bankId,   setBankId]   = useState<string | null>(null);
+  const [bankSheetOpen, setBankSheetOpen] = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error,    setError]    = useState('');
@@ -61,15 +66,16 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
 
   useEffect(() => {
     if (!visible) return;
+    if (household) loadBanks(household.id);
     if (service) {
       setName(service.name);
       setCategory(service.category ?? 'otros');
       setAmount(String(service.amount ?? ''));
       setCycle(service.cycle ?? 'monthly');
       setDateText(isoToDisplay(service.next_payment));
-      setBank(service.bank_account ?? '');
+      setBankId(service.bank_id ?? null);
     } else {
-      setName(''); setCategory('luz'); setAmount(''); setCycle('monthly'); setDateText(''); setBank('');
+      setName(''); setCategory('luz'); setAmount(''); setCycle('monthly'); setDateText(''); setBankId(null);
     }
     setError('');
   }, [service, visible]);
@@ -90,7 +96,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
       amount: amountNum,
       cycle,
       next_payment: iso,
-      bank_account: bank.trim() || null,
+      bank_id: bankId,
     };
     try {
       if (service) {
@@ -111,6 +117,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
           household_id: household.id,
           created_by: user?.id ?? null,
           created_at: new Date().toISOString(),
+          bank_account: null,
           ...patch,
         } as Subscription);
       }
@@ -157,6 +164,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
   };
 
   return (
+    <>
     <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '90%' }}>
           <ScrollView style={s.scroll} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
 
@@ -243,15 +251,28 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               maxLength={10}
             />
 
-            {/* Cuenta bancaria */}
-            <Text style={s.label}>Cuenta de banco</Text>
-            <TextInput
-              style={s.field}
-              value={bank}
-              onChangeText={setBank}
-              placeholder="Desde qué cuenta se paga (ej. BBVA ··1234)"
-              placeholderTextColor={C.ink3}
-            />
+            {/* Banco */}
+            <Text style={s.label}>Banco</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bankRow} keyboardShouldPersistTaps="handled">
+              {banks.map((b) => {
+                const on = bankId === b.id;
+                const col = nidoColorByKey(b.color);
+                return (
+                  <PressScale
+                    key={b.id}
+                    scaleTo={0.94}
+                    style={[s.bankChip, on && { borderColor: col.hex, backgroundColor: col.wash }]}
+                    onPress={() => setBankId(on ? null : b.id)}
+                  >
+                    <View style={[s.bankChipDot, { backgroundColor: col.hex }]} />
+                    <Text style={[s.bankChipText, on && { color: col.hex }]}>{b.name}</Text>
+                  </PressScale>
+                );
+              })}
+              <PressScale scaleTo={0.94} style={s.bankAddChip} onPress={() => setBankSheetOpen(true)}>
+                <Text style={s.bankAddText}>＋ Nuevo banco</Text>
+              </PressScale>
+            </ScrollView>
 
             {error ? <Text style={s.error}>{error}</Text> : null}
 
@@ -265,6 +286,14 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
 
           </ScrollView>
     </BottomSheet>
+
+    <BankSheet
+      bank={null}
+      visible={bankSheetOpen}
+      onClose={() => setBankSheetOpen(false)}
+      onSaved={(b) => { setBankId(b.id); setBankSheetOpen(false); }}
+    />
+    </>
   );
 }
 
@@ -293,6 +322,13 @@ const s = StyleSheet.create({
   cycleRow:   { gap: 8, paddingBottom: 4, paddingRight: 8, marginBottom: 20 },
   cyclePill:  { borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: C.card },
   cycleText:  { fontSize: 13.5, fontWeight: '600', color: C.ink2, fontFamily: FONT },
+
+  bankRow:      { gap: 8, paddingBottom: 4, paddingRight: 8, marginBottom: 20 },
+  bankChip:     { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.card },
+  bankChipDot:  { width: 10, height: 10, borderRadius: 5 },
+  bankChipText: { fontSize: 13.5, fontWeight: '600', color: C.ink2, fontFamily: FONT },
+  bankAddChip:  { borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.paperSoft, borderStyle: 'dashed' },
+  bankAddText:  { fontSize: 13.5, fontWeight: '600', color: C.ink3, fontFamily: FONT },
 
   error:      { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
   save:       { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center', marginTop: 4 },

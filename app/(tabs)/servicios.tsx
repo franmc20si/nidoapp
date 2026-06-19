@@ -1,13 +1,15 @@
 import { useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
+import { useBanksStore } from '@/store/banksStore';
 import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
 import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from '@/constants/services';
+import { nidoColorByKey } from '@/constants/nidoColors';
 import ServiceSheet from '@/components/ServiceSheet';
 import { withTimeout } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
@@ -38,6 +40,7 @@ function daysLabel(days: number | null): string {
 export default function ServiciosScreen() {
   const { accent } = useNidoStore();
   const { household } = useAuthStore();
+  const { banks, loadBanks } = useBanksStore();
   const [subs, setSubs]           = useState<Subscription[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
@@ -69,7 +72,10 @@ export default function ServiciosScreen() {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchSubs(); }, [household?.id]));
+  useFocusEffect(useCallback(() => {
+    fetchSubs();
+    if (household) loadBanks(household.id);
+  }, [household?.id]));
 
   const openNew = () => { setEditingSub(null); setSheetOpen(true); };
   const openEdit = (s: Subscription) => { setEditingSub(s); setSheetOpen(true); };
@@ -114,9 +120,14 @@ export default function ServiciosScreen() {
             <Text style={s.eyebrow}>GASTOS FIJOS</Text>
             <Text style={s.title}>Servicios</Text>
           </View>
-          <TouchableOpacity style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>
-            <Text style={s.addBtnText}>+ Añadir</Text>
-          </TouchableOpacity>
+          <View style={s.actions}>
+            <TouchableOpacity style={s.bankBtn} onPress={() => router.push('/bancos')} activeOpacity={0.8}>
+              <Text style={s.bankBtnText}>🏦 Bancos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>
+              <Text style={s.addBtnText}>+ Añadir</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Resumen mensual */}
@@ -182,6 +193,7 @@ export default function ServiciosScreen() {
                   const days  = daysUntil(sub.next_payment);
                   const uCol  = urgencyColor(days);
                   const cycle = getCycle(sub.cycle);
+                  const bank  = sub.bank_id ? banks.find(b => b.id === sub.bank_id) : null;
                   return (
                     <TouchableOpacity
                       key={sub.id}
@@ -192,8 +204,11 @@ export default function ServiciosScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.subName}>{sub.name}</Text>
                         <View style={s.subMeta}>
-                          {sub.bank_account ? (
-                            <Text style={s.subBank}>{sub.bank_account}</Text>
+                          {bank ? (
+                            <View style={s.subBankWrap}>
+                              <View style={[s.subBankDot, { backgroundColor: nidoColorByKey(bank.color).hex }]} />
+                              <Text style={s.subBank}>{bank.name}</Text>
+                            </View>
                           ) : null}
                           {sub.next_payment && (
                             <Text style={[s.subDays, uCol ? { color: uCol } : {}]}>
@@ -243,6 +258,9 @@ const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title:   { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bankBtn: { borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.ink },
+  bankBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
   addBtn:  { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
 
@@ -283,7 +301,9 @@ const s = StyleSheet.create({
   subCard:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.line },
   subCardLast: { borderBottomWidth: 0 },
   subName:     { fontSize: 15, fontWeight: '500', color: C.ink, fontFamily: FONT },
-  subMeta:     { flexDirection: 'row', gap: 10, marginTop: 3, flexWrap: 'wrap' },
+  subMeta:     { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3, flexWrap: 'wrap' },
+  subBankWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  subBankDot:  { width: 8, height: 8, borderRadius: 4 },
   subBank:     { fontSize: 12, color: C.ink3, fontFamily: FONT },
   subDays:     { fontSize: 12, color: C.ink3, fontFamily: FONT },
   subRight:    { alignItems: 'flex-end' },
