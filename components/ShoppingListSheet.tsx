@@ -12,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
 
@@ -79,15 +80,18 @@ async function loadChecked(wk: string): Promise<Set<string>> {
 }
 
 // Marcas de ingredientes de receta compradas, desde Supabase (sincronizadas).
-async function loadRecipeChecks(householdId: string, wk: string): Promise<Set<string>> {
-  try {
-    const { data } = await supabase
+// Devuelve { ok } para que el llamador NO confunda "falló la lectura" con
+// "no hay nada marcado": un fallo transitorio no debe desmarcar la lista.
+async function loadRecipeChecks(householdId: string, wk: string): Promise<{ ok: boolean; set: Set<string> }> {
+  const { data, error } = await readWithRetry(() =>
+    supabase
       .from('shopping_checks')
       .select('item_key')
       .eq('household_id', householdId)
-      .eq('week_key', wk);
-    return new Set((data ?? []).map((r: any) => r.item_key));
-  } catch { return new Set(); }
+      .eq('week_key', wk)
+  );
+  if (error) return { ok: false, set: new Set() };
+  return { ok: true, set: new Set((data ?? []).map((r: any) => r.item_key)) };
 }
 
 async function loadManual(wk: string): Promise<ManualItem[]> {
@@ -129,7 +133,11 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
       // Estado "comprado" de los ingredientes de receta: ahora en Supabase
       // (shopping_checks) para que sincronice entre dispositivos. Migración única
       // por semana: subimos lo que aún viviera en AsyncStorage (device-local).
-      const recipeChecked = await loadRecipeChecks(householdId, weekKey);
+      const recipeRes = await loadRecipeChecks(householdId, weekKey);
+      // Si la lectura falló, abortamos: no sobreescribimos `checked` con vacío
+      // (pintaría todo desmarcado) ni marcamos la migración como hecha.
+      if (!recipeRes.ok) return;
+      const recipeChecked = recipeRes.set;
       const migKey   = `nido_shop_checks_migrated_${weekKey}`;
       const migrated = await AsyncStorage.getItem(migKey);
       if (!migrated) {
@@ -150,31 +158,41 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
       }
       setChecked(recipeChecked);
 
-      // Get or create the shopping_list record for this week
-      const { data: existing } = await supabase
-        .from('shopping_lists')
-        .select('id')
-        .eq('household_id', householdId)
-        .eq('week_key', weekKey)
-        .maybeSingle();
+      // Get or create the shopping_list record for this week.
+      // Si la lectura falla NO seguimos: crear otra lista duplicaría la semana
+      // y dejaría los productos manuales "desaparecidos" (lista nueva vacía).
+      const { data: existing, error: listErr } = await readWithRetry(() =>
+        supabase
+          .from('shopping_lists')
+          .select('id')
+          .eq('household_id', householdId)
+          .eq('week_key', weekKey)
+          .maybeSingle()
+      );
+      if (listErr) return;
 
       let lid: string | null = existing?.id ?? null;
       if (!lid) {
-        const { data: created } = await supabase
-          .from('shopping_lists')
-          .insert({ household_id: householdId, week_key: weekKey })
-          .select('id')
-          .single();
-        lid = created?.id ?? null;
+        // id en cliente + insert sin .select().single() (patrón robusto del proyecto:
+        // la relectura post-insert bajo RLS es frágil).
+        const newLid = genId();
+        const { error: createErr } = await withTimeout(
+          supabase.from('shopping_lists').insert({ id: newLid, household_id: householdId, week_key: weekKey })
+        );
+        if (createErr) return;
+        lid = newLid;
       }
       listIdRef.current = lid;
 
       if (!lid) return;
 
-      const { data: items } = await supabase
-        .from('shopping_items')
-        .select('id, name, unit, category, is_checked')
-        .eq('list_id', lid);
+      const { data: items, error: itemsErr } = await readWithRetry(() =>
+        supabase
+          .from('shopping_items')
+          .select('id, name, unit, category, is_checked')
+          .eq('list_id', lid)
+      );
+      if (itemsErr) return; // conservar los productos manuales ya mostrados
 
       if (items?.length) {
         setManualItems(items.map(i => ({

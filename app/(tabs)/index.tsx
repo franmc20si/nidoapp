@@ -14,7 +14,7 @@ import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import StaggerItem from '@/components/StaggerItem';
 import { isDueAgain, nextDueDate } from '@/lib/recurrence';
-import { withTimeout } from '@/lib/withTimeout';
+import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import { getServiceCat } from '@/constants/services';
 
@@ -162,36 +162,37 @@ export default function HoyScreen() {
     const wk = weekKey(new Date());
 
     // 1. Estado "comprado" de los ingredientes de receta (Supabase, sincronizado)
-    try {
-      const { data } = await withTimeout(
-        supabase.from('shopping_checks')
-          .select('item_key')
-          .eq('household_id', household.id)
-          .eq('week_key', wk)
-      );
-      setRecipeChecked(new Set((data ?? []).map((r: any) => r.item_key)));
-    } catch { setRecipeChecked(new Set()); }
+    //    Si la lectura falla NO sobreescribimos con un Set vacío: eso pintaría
+    //    todos los ingredientes como "sin comprar" por un fallo transitorio. Se
+    //    conserva el estado previo y se recupera en la próxima carga con éxito.
+    const { data: checksData, error: checksErr } = await readWithRetry(() =>
+      supabase.from('shopping_checks')
+        .select('item_key')
+        .eq('household_id', household.id)
+        .eq('week_key', wk)
+    );
+    if (!checksErr) {
+      setRecipeChecked(new Set((checksData ?? []).map((r: any) => r.item_key)));
+    }
 
     // 2. Productos manuales sin comprar (Supabase)
-    try {
-      const { data: list } = await withTimeout(
-        supabase.from('shopping_lists')
-          .select('id')
-          .eq('household_id', household.id)
-          .eq('week_key', wk)
-          .maybeSingle()
-      );
-      if (!list?.id) { setManualItems([]); return; }
-      const { data: items } = await withTimeout(
-        supabase.from('shopping_items')
-          .select('id, name, unit, is_checked')
-          .eq('list_id', list.id)
-          .eq('is_checked', false)
-      );
-      setManualItems((items ?? []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit ?? null })));
-    } catch {
-      setManualItems([]);
-    }
+    const { data: list, error: listErr } = await readWithRetry(() =>
+      supabase.from('shopping_lists')
+        .select('id')
+        .eq('household_id', household.id)
+        .eq('week_key', wk)
+        .maybeSingle()
+    );
+    if (listErr) return;                       // fallo transitorio: conservar lista previa
+    if (!list?.id) { setManualItems([]); return; } // sin lista esta semana: vacío real
+    const { data: items, error: itemsErr } = await readWithRetry(() =>
+      supabase.from('shopping_items')
+        .select('id, name, unit, is_checked')
+        .eq('list_id', list.id)
+        .eq('is_checked', false)
+    );
+    if (itemsErr) return;                       // fallo transitorio: conservar lista previa
+    setManualItems((items ?? []).map((i: any) => ({ id: i.id, name: i.name, unit: i.unit ?? null })));
   };
 
   // ── Próximos pagos ────────────────────────────────────────────────────────

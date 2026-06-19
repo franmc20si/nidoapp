@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
-import { withTimeout } from '@/lib/withTimeout';
+import { readWithRetry } from '@/lib/withTimeout';
 
 // ─── tipos compartidos ───────────────────────────────────────────────────────
 export interface Recipe {
@@ -74,8 +74,8 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     set({ loadingFor: householdId, loadError: false });
     try {
       const [recipesRes, plansRes, migrationDoneRaw] = await Promise.all([
-        withTimeout(supabase.from('recipes').select('*').eq('household_id', householdId)),
-        withTimeout(supabase.from('meal_plans').select('week_key, plan').eq('household_id', householdId)),
+        readWithRetry(() => supabase.from('recipes').select('*').eq('household_id', householdId)),
+        readWithRetry(() => supabase.from('meal_plans').select('week_key, plan').eq('household_id', householdId)),
         AsyncStorage.getItem(STORAGE_MIGRATION_DONE),
       ]);
 

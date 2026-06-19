@@ -11,7 +11,7 @@ import { Subscription } from '@/types';
 import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import ServiceSheet from '@/components/ServiceSheet';
-import { withTimeout } from '@/lib/withTimeout';
+import { readWithRetry } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
 // Días hasta la próxima fecha de pago
@@ -54,7 +54,7 @@ export default function ServiciosScreen() {
     setLoading(true);
     setLoadError(false);
     try {
-      const { data, error } = await withTimeout(
+      const { data, error } = await readWithRetry(() =>
         supabase
           .from('subscriptions')
           .select('*')

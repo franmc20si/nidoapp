@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { withTimeout } from '@/lib/withTimeout';
+import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { VacationPeriod } from '@/types';
 
 export interface PeriodInput {
@@ -33,7 +33,7 @@ export const useCalendarioStore = create<CalendarioState>((set, get) => ({
     if (get().loadingFor === householdId) return;
     set({ loadingFor: householdId, loadError: false });
     try {
-      const { data, error } = await withTimeout(
+      const { data, error } = await readWithRetry(() =>
         supabase
           .from('vacation_periods')
           .select('*')

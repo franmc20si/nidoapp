@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import { withTimeout } from '@/lib/withTimeout';
+import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { Bank } from '@/types';
 
 export interface BankInput {
@@ -34,7 +34,7 @@ export const useBanksStore = create<BanksState>((set, get) => ({
     if (get().loadingFor === householdId) return;
     set({ loadingFor: householdId, loadError: false });
     try {
-      const { data, error } = await withTimeout(
+      const { data, error } = await readWithRetry(() =>
         supabase
           .from('banks')
           .select('*')

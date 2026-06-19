@@ -7,7 +7,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useBanksStore } from '@/store/banksStore';
 import { supabase } from '@/lib/supabase';
-import { withTimeout } from '@/lib/withTimeout';
+import { readWithRetry } from '@/lib/withTimeout';
 import { Bank, Subscription } from '@/types';
 import { monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
@@ -37,7 +37,7 @@ export default function BancosScreen() {
     try {
       const [, subRes] = await Promise.all([
         loadBanks(household.id),
-        withTimeout(
+        readWithRetry(() =>
           supabase.from('subscriptions').select('amount, cycle, bank_id').eq('household_id', household.id)
         ),
       ]);
