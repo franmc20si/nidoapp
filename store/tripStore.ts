@@ -21,6 +21,7 @@ interface TripState {
 
   loadItems: (householdId: string, periodId: string) => Promise<void>;
   addItem: (householdId: string, userId: string | undefined, periodId: string, input: TripItemInput) => Promise<{ ok: boolean; error?: string }>;
+  addItems: (householdId: string, userId: string | undefined, periodId: string, inputs: TripItemInput[]) => Promise<{ ok: boolean; error?: string }>;
   updateItem: (periodId: string, id: string, patch: Partial<TripItemInput>) => Promise<{ ok: boolean; error?: string }>;
   deleteItem: (periodId: string, id: string) => Promise<{ ok: boolean; error?: string }>;
 }
@@ -110,6 +111,63 @@ export const useTripStore = create<TripState>((set, get) => ({
       return { ok: true };
     } catch (e: any) {
       set((s) => ({ itemsByPeriod: { ...s.itemsByPeriod, [periodId]: (s.itemsByPeriod[periodId] ?? []).filter((i) => i.id !== id) } }));
+      return { ok: false, error: e?.message === 'TIMEOUT' ? 'La conexión tardó demasiado. Inténtalo de nuevo.' : (e?.message ?? 'No se pudo guardar') };
+    }
+  },
+
+  // Inserta varios items de una vez (p.ej. un hotel para varias noches → un item
+  // por día). Una sola petición y un solo rollback si falla.
+  addItems: async (householdId, userId, periodId, inputs) => {
+    if (inputs.length === 0) return { ok: true };
+    if (inputs.length === 1) return get().addItem(householdId, userId, periodId, inputs[0]);
+    const base = Date.now() % 1_000_000;
+    const items: TripItem[] = inputs.map((input, i) => ({
+      id: crypto.randomUUID(),
+      household_id: householdId,
+      period_id: periodId,
+      day: input.day,
+      kind: input.kind,
+      title: input.title,
+      url: input.url,
+      place: input.place,
+      price: input.price,
+      sort: base + i,
+      created_by: userId ?? null,
+      created_at: new Date().toISOString(),
+    }));
+    const ids = new Set(items.map((it) => it.id));
+    // Optimista
+    set((s) => ({
+      itemsByPeriod: {
+        ...s.itemsByPeriod,
+        [periodId]: [...(s.itemsByPeriod[periodId] ?? []), ...items].sort(sortItems),
+      },
+    }));
+    const rollback = () => set((s) => ({
+      itemsByPeriod: { ...s.itemsByPeriod, [periodId]: (s.itemsByPeriod[periodId] ?? []).filter((i) => !ids.has(i.id)) },
+    }));
+    try {
+      const { error } = await withTimeout(
+        supabase.from('trip_items').insert(
+          items.map((it) => ({
+            id: it.id,
+            household_id: householdId,
+            period_id: periodId,
+            day: it.day,
+            kind: it.kind,
+            title: it.title,
+            url: it.url,
+            place: it.place,
+            price: it.price,
+            sort: it.sort,
+            created_by: userId,
+          })) as any
+        )
+      );
+      if (error) { rollback(); return { ok: false, error: error.message }; }
+      return { ok: true };
+    } catch (e: any) {
+      rollback();
       return { ok: false, error: e?.message === 'TIMEOUT' ? 'La conexión tardó demasiado. Inténtalo de nuevo.' : (e?.message ?? 'No se pudo guardar') };
     }
   },

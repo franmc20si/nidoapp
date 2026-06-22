@@ -50,20 +50,22 @@ function dayChipLabel(iso: string) {
 
 // ─── Sheet para añadir un sitio ───────────────────────────────────────────────
 function AddItemSheet({
-  visible, kind, day, periodId, color, onClose,
+  visible, kind, day, days, periodId, color, onClose,
 }: {
   visible: boolean;
   kind: TripItemKind | null;
   day: string;
+  days: string[];        // todos los días del viaje (para limitar las noches)
   periodId: string;
   color: string;
   onClose: () => void;
 }) {
   const { household, user } = useAuthStore();
-  const { addItem } = useTripStore();
+  const { addItems } = useTripStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [price, setPrice] = useState('');
+  const [nights, setNights] = useState('1');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -72,11 +74,21 @@ function AddItemSheet({
   const [lastKey, setLastKey] = useState('closed');
   if (visible && key !== lastKey) {
     setLastKey(key);
-    setTitle(''); setUrl(''); setPrice(''); setError(''); setSaving(false);
+    setTitle(''); setUrl(''); setPrice(''); setNights('1'); setError(''); setSaving(false);
   }
 
   if (!kind) return null;
   const kindMeta = KINDS.find((k) => k.key === kind)!;
+  const isLodging = kind === 'dormir';
+
+  // Noches posibles desde el día elegido hasta el final del viaje (no se pueden
+  // crear entradas fuera del rango del viaje).
+  const startIdx = days.indexOf(day);
+  const maxNights = startIdx >= 0 ? days.length - startIdx : 1;
+  const nightsNum = Math.min(Math.max(parseInt(nights, 10) || 1, 1), Math.max(maxNights, 1));
+  const coveredDays = startIdx >= 0 ? days.slice(startIdx, startIdx + nightsNum) : [day];
+  const decNights = () => setNights(String(Math.max(nightsNum - 1, 1)));
+  const incNights = () => setNights(String(Math.min(nightsNum + 1, maxNights)));
 
   // Al pegar el link, si el nombre está vacío intentamos rellenarlo del propio link.
   const onChangeUrl = (v: string) => {
@@ -94,15 +106,18 @@ function AddItemSheet({
     if (clean && !looksLikeMapsUrl(clean)) { setError('El link no parece de Google Maps'); return; }
     setSaving(true); setError('');
     const place = clean ? extractPlaceName(clean) : null;
-    const input: TripItemInput = {
-      day,
+    const base = {
       kind,
       title: title.trim() || place || 'Sitio',
       url: clean || null,
       place,
       price: parsePrice(price),
     };
-    const res = await addItem(household.id, user?.id, periodId, input);
+    // En "dormir" se pueden crear varias noches consecutivas (un item por día).
+    const n = isLodging ? Math.min(Math.max(parseInt(nights, 10) || 1, 1), maxNights) : 1;
+    const targetDays = startIdx >= 0 ? days.slice(startIdx, startIdx + n) : [day];
+    const inputs: TripItemInput[] = targetDays.map((d) => ({ ...base, day: d }));
+    const res = await addItems(household.id, user?.id, periodId, inputs);
     setSaving(false);
     if (!res.ok) { setError(res.error ?? 'No se pudo guardar'); return; }
     onClose();
@@ -112,7 +127,7 @@ function AddItemSheet({
     <BottomSheet visible={visible} onClose={onClose}>
       <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
         <Text style={a.eyebrow}>{kindMeta.emoji} {kindMeta.label.toUpperCase()} · {shortDate(day)}</Text>
-        <Text style={a.title}>Añadir sitio</Text>
+        <Text style={a.title}>{isLodging ? 'Añadir alojamiento' : 'Añadir sitio'}</Text>
 
         <TextInput
           style={a.field}
@@ -133,14 +148,39 @@ function AddItemSheet({
         />
         <TextInput
           style={a.field}
-          placeholder="Precio (opcional, ej. 12,50)"
+          placeholder={isLodging ? 'Precio por noche (opcional)' : 'Precio (opcional, ej. 12,50)'}
           placeholderTextColor={C.ink3}
           value={price}
           onChangeText={setPrice}
           keyboardType="decimal-pad"
           inputMode="decimal"
         />
-        <Text style={a.hint}>Pega el enlace de “Compartir” de Google Maps. Mostraremos el sitio con un pin y, al tocarlo, se abrirá en Maps.</Text>
+
+        {isLodging && (
+          <View style={a.nightsRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={a.nightsLabel}>Noches</Text>
+              <Text style={a.nightsHint}>
+                {nightsNum} {nightsNum === 1 ? 'noche' : 'noches'} · {shortDate(coveredDays[0])} → {shortDate(coveredDays[coveredDays.length - 1])}
+              </Text>
+            </View>
+            <View style={a.stepper}>
+              <PressScale style={[a.stepBtn, nightsNum <= 1 && a.stepBtnOff]} onPress={decNights} disabled={nightsNum <= 1} scaleTo={0.9}>
+                <Text style={a.stepTxt}>−</Text>
+              </PressScale>
+              <Text style={a.stepNum}>{nightsNum}</Text>
+              <PressScale style={[a.stepBtn, nightsNum >= maxNights && a.stepBtnOff]} onPress={incNights} disabled={nightsNum >= maxNights} scaleTo={0.9}>
+                <Text style={a.stepTxt}>＋</Text>
+              </PressScale>
+            </View>
+          </View>
+        )}
+
+        <Text style={a.hint}>
+          {isLodging
+            ? 'Si te quedas varias noches en el mismo sitio, sube las noches y se añadirá a cada día automáticamente. El precio es por noche.'
+            : 'Pega el enlace de “Compartir” de Google Maps. Mostraremos el sitio con un pin y, al tocarlo, se abrirá en Maps.'}
+        </Text>
 
         {error ? <Text style={a.error}>{error}</Text> : null}
 
@@ -311,6 +351,7 @@ export default function TripDetailScreen() {
         visible={sheetOpen}
         kind={addKind}
         day={activeDay ?? ''}
+        days={days}
         periodId={periodId}
         color={color}
         onClose={() => { setSheetOpen(false); setAddKind(null); }}
@@ -375,6 +416,14 @@ const a = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4, marginBottom: 18 },
   field: { borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 18, paddingVertical: 15, fontSize: 16, color: C.ink, backgroundColor: C.card, fontFamily: FONT, marginBottom: 12 },
   hint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, lineHeight: 18, marginBottom: 18 },
+  nightsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2, marginBottom: 14 },
+  nightsLabel: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
+  nightsHint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepBtn: { width: 36, height: 36, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
+  stepBtnOff: { opacity: 0.4 },
+  stepTxt: { fontSize: 18, color: C.ink, fontFamily: FONT, fontWeight: '600', lineHeight: 20 },
+  stepNum: { minWidth: 28, textAlign: 'center', fontSize: 17, color: C.ink, fontFamily: FONT, fontWeight: '700' },
   error: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
   save: { borderRadius: R.pill, paddingVertical: 16, alignItems: 'center' },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
