@@ -82,7 +82,23 @@ export const useTripStore = create<TripState>((set, get) => ({
         [periodId]: [...(s.itemsByPeriod[periodId] ?? []), item].sort(sortItems),
       },
     }));
+    // ── DIAGNÓSTICO TEMPORAL (quitar tras resolver el cuelgue al guardar) ──────
+    const t0 = Date.now();
+    console.log('[trip][addItem] start', { householdId, periodId, day: input.day, kind: input.kind, hasUrl: !!input.url });
     try {
+      try {
+        const sres: any = await withTimeout(supabase.auth.getSession(), 6000);
+        console.log('[trip][addItem] getSession', Date.now() - t0, 'ms', {
+          hasSession: !!sres?.data?.session,
+          tokenLen: sres?.data?.session?.access_token?.length ?? 0,
+          err: sres?.error?.message,
+        });
+      } catch (se: any) {
+        console.log('[trip][addItem] getSession FAILED', Date.now() - t0, 'ms', se?.message);
+      }
+
+      const tIns = Date.now();
+      console.log('[trip][addItem] insert ->');
       const { error } = await withTimeout(
         supabase.from('trip_items').insert({
           id,
@@ -97,12 +113,14 @@ export const useTripStore = create<TripState>((set, get) => ({
           created_by: userId,
         } as any)
       );
+      console.log('[trip][addItem] insert <-', Date.now() - tIns, 'ms', { error: error ? JSON.stringify(error) : null });
       if (error) {
         set((s) => ({ itemsByPeriod: { ...s.itemsByPeriod, [periodId]: (s.itemsByPeriod[periodId] ?? []).filter((i) => i.id !== id) } }));
         return { ok: false, error: error.message };
       }
       return { ok: true };
     } catch (e: any) {
+      console.log('[trip][addItem] THREW', Date.now() - t0, 'ms', e?.message, e);
       set((s) => ({ itemsByPeriod: { ...s.itemsByPeriod, [periodId]: (s.itemsByPeriod[periodId] ?? []).filter((i) => i.id !== id) } }));
       return { ok: false, error: e?.message === 'TIMEOUT' ? 'La conexión tardó demasiado. Inténtalo de nuevo.' : (e?.message ?? 'No se pudo guardar') };
     }
