@@ -409,7 +409,7 @@ const s = StyleSheet.create({
   pendingCancel: { fontSize: 13, color: C.brand, fontFamily: FONT, fontWeight: '600' },
 
   monthCard: { backgroundColor: C.card, borderRadius: R.xl, paddingHorizontal: 16, paddingVertical: 13, borderWidth: 1, borderColor: C.line },
-  monthTitle: { fontSize: 16.5, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, marginBottom: 8 },
+  monthTitle: { fontSize: 16.5, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, padding: 5, marginBottom: 8 },
 
   weekHeaderRow: { flexDirection: 'row', marginBottom: 2 },
   weekHeaderText: { flex: 1, textAlign: 'center', fontSize: 10.5, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
