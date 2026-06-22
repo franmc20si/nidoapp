@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
@@ -182,11 +182,12 @@ function PeriodSheet({
 
 // ─── Cuadrícula de un mes ────────────────────────────────────────────────────
 function MonthCard({
-  year, month, periods, pendingStart, onDayPress,
+  year, month, periods, pendingStart, onDayPress, cardWidth,
 }: {
   year: number; month: number; periods: VacationPeriod[];
   pendingStart: string | null;
   onDayPress: (iso: string, period: VacationPeriod | undefined) => void;
+  cardWidth?: number;
 }) {
   const weeks = monthMatrix(year, month);
   const monthPeriods = periods.filter((p) => {
@@ -196,7 +197,7 @@ function MonthCard({
   });
 
   return (
-    <View style={s.monthCard}>
+    <View style={[s.monthCard, cardWidth != null && { width: cardWidth }]}>
       <Text style={s.monthTitle}>{monthLabel(year, month)}</Text>
 
       <View style={s.weekHeaderRow}>
@@ -264,11 +265,24 @@ export default function CalendarioScreen() {
 
   useFocusEffect(useCallback(() => { fetchPeriods(); }, [fetchPeriods]));
 
+  // ── Layout responsive ──────────────────────────────────────────────────────
+  // En escritorio los meses van en rejilla centrada con ancho máximo; en móvil,
+  // una sola columna apilada como siempre.
+  const { width: winW } = useWindowDimensions();
+  const H_PAD = 20;
+  const MAX_W = 1240;
+  const cols = winW >= 1180 ? 3 : winW >= 760 ? 2 : 1;
+  const gap = cols === 1 ? 12 : 18;
+  const monthCount = cols === 1 ? 3 : 6;
+  const containerW = Math.min(winW, MAX_W);
+  const innerW = containerW - H_PAD * 2;
+  const cardW = cols === 1 ? innerW : Math.floor((innerW - gap * (cols - 1)) / cols);
+
   const today = new Date();
   const baseYear = today.getFullYear();
   const baseMonth = today.getMonth();
 
-  const monthsToShow = [0, 1, 2].map((i) => {
+  const monthsToShow = Array.from({ length: monthCount }, (_, i) => {
     const total = baseMonth + monthOffset + i;
     return { year: baseYear + Math.floor(total / 12), month: ((total % 12) + 12) % 12 };
   });
@@ -314,47 +328,52 @@ export default function CalendarioScreen() {
           />
         }
       >
-        <View style={s.topbar}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>VACACIONES</Text>
-            <Text style={s.title}>Calendario</Text>
+        <View style={[s.container, { maxWidth: MAX_W, paddingHorizontal: H_PAD }]}>
+          <View style={s.topbar}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.eyebrow}>VACACIONES</Text>
+              <Text style={s.title}>Calendario</Text>
+            </View>
+            <View style={s.navRow}>
+              <TouchableOpacity style={s.tripsBtn} onPress={() => router.push('/viajes')} activeOpacity={0.85}>
+                <Text style={s.tripsBtnText}>✈️ Viajes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.navBtn, monthOffset === 0 && s.navBtnDisabled]}
+                disabled={monthOffset === 0}
+                onPress={() => setMonthOffset((o) => Math.max(0, o - 1))}
+              >
+                <View style={{ transform: [{ rotate: '180deg' }] }}>
+                  <IconChevronRight size={18} color={monthOffset === 0 ? C.line : C.ink2} />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.navBtn} onPress={() => setMonthOffset((o) => o + 1)}>
+                <IconChevronRight size={18} color={C.ink2} />
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={s.navRow}>
-            <TouchableOpacity style={s.tripsBtn} onPress={() => router.push('/viajes')} activeOpacity={0.85}>
-              <Text style={s.tripsBtnText}>✈️ Viajes</Text>
+
+          {pendingStart && (
+            <TouchableOpacity style={s.pendingBar} onPress={() => setPendingStart(null)} activeOpacity={0.8}>
+              <Text style={s.pendingText}>Selecciona el día de fin · {shortDate(pendingStart)} → …</Text>
+              <Text style={s.pendingCancel}>Cancelar</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.navBtn, monthOffset === 0 && s.navBtnDisabled]}
-              disabled={monthOffset === 0}
-              onPress={() => setMonthOffset((o) => Math.max(0, o - 1))}
-            >
-              <View style={{ transform: [{ rotate: '180deg' }] }}>
-                <IconChevronRight size={18} color={monthOffset === 0 ? C.line : C.ink2} />
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.navBtn} onPress={() => setMonthOffset((o) => o + 1)}>
-              <IconChevronRight size={18} color={C.ink2} />
-            </TouchableOpacity>
+          )}
+
+          <View style={[s.monthsGrid, { gap }]}>
+            {monthsToShow.map(({ year, month }) => (
+              <MonthCard
+                key={`${year}-${month}`}
+                year={year}
+                month={month}
+                periods={periods}
+                pendingStart={pendingStart}
+                onDayPress={handleDayPress}
+                cardWidth={cardW}
+              />
+            ))}
           </View>
         </View>
-
-        {pendingStart && (
-          <TouchableOpacity style={s.pendingBar} onPress={() => setPendingStart(null)} activeOpacity={0.8}>
-            <Text style={s.pendingText}>Selecciona el día de fin · {shortDate(pendingStart)} → …</Text>
-            <Text style={s.pendingCancel}>Cancelar</Text>
-          </TouchableOpacity>
-        )}
-
-        {monthsToShow.map(({ year, month }) => (
-          <MonthCard
-            key={`${year}-${month}`}
-            year={year}
-            month={month}
-            periods={periods}
-            pendingStart={pendingStart}
-            onDayPress={handleDayPress}
-          />
-        ))}
       </ScrollView>
 
       <PeriodSheet
@@ -370,7 +389,11 @@ export default function CalendarioScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
 
-  topbar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 16 },
+  // Contenedor centrado con ancho máximo (clave para escritorio).
+  container: { width: '100%', alignSelf: 'center' },
+  monthsGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
+
+  topbar: { flexDirection: 'row', alignItems: 'flex-end', paddingTop: 18, paddingBottom: 16 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
   title: { fontSize: 30, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.6 },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -381,13 +404,13 @@ const s = StyleSheet.create({
 
   pendingBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 20, marginBottom: 14, paddingHorizontal: 16, paddingVertical: 12,
+    marginBottom: 14, paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: C.brandWash, borderRadius: R.l,
   },
   pendingText: { fontSize: 13, color: C.ink2, fontFamily: FONT, fontWeight: '500' },
   pendingCancel: { fontSize: 13, color: C.brand, fontFamily: FONT, fontWeight: '600' },
 
-  monthCard: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.xl, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 11, borderWidth: 1, borderColor: C.line },
+  monthCard: { backgroundColor: C.card, borderRadius: R.xl, paddingHorizontal: 16, paddingVertical: 13, borderWidth: 1, borderColor: C.line },
   monthTitle: { fontSize: 16.5, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, marginBottom: 8 },
 
   weekHeaderRow: { flexDirection: 'row', marginBottom: 2 },
