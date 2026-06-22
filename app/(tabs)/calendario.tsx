@@ -270,12 +270,10 @@ export default function CalendarioScreen() {
   // una sola columna apilada como siempre.
   const { width: winW } = useWindowDimensions();
   const H_PAD = 20;
-  const MAX_W = 1240;
   const cols = winW >= 1180 ? 3 : winW >= 760 ? 2 : 1;
   const gap = cols === 1 ? 12 : 18;
   const monthCount = cols === 1 ? 3 : 6;
-  const containerW = Math.min(winW, MAX_W);
-  const innerW = containerW - H_PAD * 2;
+  const innerW = winW - H_PAD * 2;
   const cardW = cols === 1 ? innerW : Math.floor((innerW - gap * (cols - 1)) / cols);
 
   const today = new Date();
@@ -328,7 +326,7 @@ export default function CalendarioScreen() {
           />
         }
       >
-        <View style={[s.container, { maxWidth: MAX_W, paddingHorizontal: H_PAD }]}>
+        <View style={[s.container, { paddingHorizontal: H_PAD }]}>
           <View style={s.topbar}>
             <View style={{ flex: 1 }}>
               <Text style={s.eyebrow}>VACACIONES</Text>
