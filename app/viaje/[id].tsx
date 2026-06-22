@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator, Platform, Alert,
+  TextInput, ActivityIndicator, Platform, Alert, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +15,7 @@ import { extractPlaceName, looksLikeMapsUrl, openMaps } from '@/lib/maps';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
+import { IconChevronRight } from '@/components/icons';
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -193,26 +194,30 @@ function AddItemSheet({
 }
 
 // ─── Tarjeta de un sitio ──────────────────────────────────────────────────────
-function ItemCard({ item, color, onDelete }: { item: TripItem; color: string; onDelete: () => void }) {
+function ItemCard({ item, color, onDelete, compact }: { item: TripItem; color: string; onDelete: () => void; compact?: boolean }) {
   return (
     <View style={c.card}>
       <PressScale
-        style={c.tap}
+        style={[c.tap, compact && c.tapC]}
         onPress={() => item.url && openMaps(item.url)}
         disabled={!item.url}
       >
-        <View style={[c.pin, { backgroundColor: color }]}>
-          <Text style={c.pinGlyph}>📍</Text>
+        <View style={[c.pin, compact && c.pinC, { backgroundColor: color }]}>
+          <Text style={compact ? c.pinGlyphC : c.pinGlyph}>📍</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={c.name} numberOfLines={1}>{item.title}</Text>
-          <Text style={c.sub} numberOfLines={1}>
-            {item.url ? (item.place ?? 'Ver en Google Maps') : 'Sin enlace'}
-          </Text>
+          <Text style={c.name} numberOfLines={compact ? 2 : 1}>{item.title}</Text>
+          {compact
+            ? (item.price != null && <Text style={[c.priceC, { color }]}>{money(item.price)}</Text>)
+            : (
+              <Text style={c.sub} numberOfLines={1}>
+                {item.url ? (item.place ?? 'Ver en Google Maps') : 'Sin enlace'}
+              </Text>
+            )}
         </View>
-        {item.price != null && <Text style={[c.price, { color }]}>{money(item.price)}</Text>}
+        {!compact && item.price != null && <Text style={[c.price, { color }]}>{money(item.price)}</Text>}
       </PressScale>
-      <TouchableOpacity style={c.del} onPress={onDelete} hitSlop={8}>
+      <TouchableOpacity style={[c.del, compact && c.delC]} onPress={onDelete} hitSlop={8}>
         <Text style={c.delText}>✕</Text>
       </TouchableOpacity>
     </View>
@@ -237,7 +242,18 @@ export default function TripDetailScreen() {
     : (days.includes(toIso(new Date())) ? toIso(new Date()) : days[0] ?? null);
 
   const [addKind, setAddKind] = useState<TripItemKind | null>(null);
+  const [addDay, setAddDay] = useState<string>('');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [page, setPage] = useState(0);
+
+  // En escritorio mostramos los días en columnas paralelas (hasta 7 a la vez),
+  // sin tener que pinchar cada día. En móvil/tablet, selector + día activo.
+  const { width: winW } = useWindowDimensions();
+  const isWide = winW >= 920;
+  const PER_PAGE = 7;
+  const totalPages = Math.max(1, Math.ceil(days.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageDays = isWide ? days.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE) : [];
 
   const fetchAll = useCallback(async () => {
     if (!household) return;
@@ -252,7 +268,32 @@ export default function TripDetailScreen() {
   // Total del viaje entero (todos los días y categorías), siempre visible al pie.
   const tripTotal = items.reduce((acc, it) => acc + (it.price ?? 0), 0);
 
-  const openAdd = (kind: TripItemKind) => { setAddKind(kind); setSheetOpen(true); };
+  const openAdd = (kind: TripItemKind, day: string) => { setAddKind(kind); setAddDay(day); setSheetOpen(true); };
+
+  // Renderiza las 3 secciones (Ver/Comer/Dormir) de un día. `compact` para las
+  // columnas estrechas de escritorio.
+  const renderSections = (day: string, compact: boolean) => KINDS.map((k) => {
+    const list = items.filter((it) => it.day === day && it.kind === k.key);
+    return (
+      <View key={k.key} style={compact ? s.sectionC : s.section}>
+        <View style={s.sectionHead}>
+          <Text style={[s.sectionTitle, compact && s.sectionTitleC]}>{k.emoji} {k.label}</Text>
+          <PressScale style={s.addChip} onPress={() => openAdd(k.key, day)} scaleTo={0.94}>
+            <Text style={[s.addChipText, { color }]}>{compact ? '＋' : '＋ Añadir'}</Text>
+          </PressScale>
+        </View>
+        {list.length === 0 ? (
+          <Text style={s.sectionEmpty}>{compact ? '—' : 'Nada planeado todavía'}</Text>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {list.map((it) => (
+              <ItemCard key={it.id} item={it} color={color} onDelete={() => confirmDelete(it)} compact={compact} />
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  });
 
   const confirmDelete = (item: TripItem) => {
     const doDelete = () => useTripStore.getState().deleteItem(periodId, item.id);
@@ -302,43 +343,65 @@ export default function TripDetailScreen() {
         </View>
         <Text style={s.range}>{shortDate(period!.start_date)} — {shortDate(period!.end_date)}</Text>
 
-        {/* Selector de días */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dayStrip}>
-          {days.map((iso, i) => {
-            const { dow, num } = dayChipLabel(iso);
-            const on = iso === activeDay;
-            return (
-              <PressScale key={iso} style={[s.dayChip, on && { backgroundColor: color, borderColor: color }]} onPress={() => setSelectedDay(iso)} scaleTo={0.94}>
-                <Text style={[s.dayChipTop, on && s.dayChipTextOn]}>Día {i + 1}</Text>
-                <Text style={[s.dayChipDow, on && s.dayChipTextOn]}>{dow} {num}</Text>
-              </PressScale>
-            );
-          })}
-        </ScrollView>
-
-        {/* Secciones del día activo */}
-        {activeDay && KINDS.map((k) => {
-          const list = items.filter((it) => it.day === activeDay && it.kind === k.key);
-          return (
-            <View key={k.key} style={s.section}>
-              <View style={s.sectionHead}>
-                <Text style={s.sectionTitle}>{k.emoji} {k.label}</Text>
-                <PressScale style={s.addChip} onPress={() => openAdd(k.key)} scaleTo={0.94}>
-                  <Text style={[s.addChipText, { color }]}>＋ Añadir</Text>
-                </PressScale>
+        {isWide ? (
+          /* ESCRITORIO: días en columnas paralelas, todo visible a la vez */
+          <View style={s.desktop}>
+            {totalPages > 1 && (
+              <View style={s.pager}>
+                <TouchableOpacity
+                  style={[s.pagerBtn, safePage === 0 && s.pagerBtnOff]}
+                  disabled={safePage === 0}
+                  onPress={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  <View style={{ transform: [{ rotate: '180deg' }] }}>
+                    <IconChevronRight size={16} color={safePage === 0 ? C.line : C.ink2} />
+                  </View>
+                </TouchableOpacity>
+                <Text style={s.pagerLabel}>Días {safePage * PER_PAGE + 1}–{Math.min((safePage + 1) * PER_PAGE, days.length)} de {days.length}</Text>
+                <TouchableOpacity
+                  style={[s.pagerBtn, safePage >= totalPages - 1 && s.pagerBtnOff]}
+                  disabled={safePage >= totalPages - 1}
+                  onPress={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  <IconChevronRight size={16} color={safePage >= totalPages - 1 ? C.line : C.ink2} />
+                </TouchableOpacity>
               </View>
-              {list.length === 0 ? (
-                <Text style={s.sectionEmpty}>Nada planeado todavía</Text>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {list.map((it) => (
-                    <ItemCard key={it.id} item={it} color={color} onDelete={() => confirmDelete(it)} />
-                  ))}
-                </View>
-              )}
+            )}
+            <View style={s.daysRow}>
+              {pageDays.map((iso) => {
+                const { dow, num } = dayChipLabel(iso);
+                const idx = days.indexOf(iso);
+                return (
+                  <View key={iso} style={s.dayCol}>
+                    <View style={[s.dayColHead, { borderTopColor: color }]}>
+                      <Text style={s.dayColTop}>Día {idx + 1}</Text>
+                      <Text style={s.dayColDow}>{dow} {num}</Text>
+                    </View>
+                    {renderSections(iso, true)}
+                  </View>
+                );
+              })}
             </View>
-          );
-        })}
+          </View>
+        ) : (
+          /* MÓVIL/TABLET: selector de día + secciones del día activo */
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dayStrip}>
+              {days.map((iso, i) => {
+                const { dow, num } = dayChipLabel(iso);
+                const on = iso === activeDay;
+                return (
+                  <PressScale key={iso} style={[s.dayChip, on && { backgroundColor: color, borderColor: color }]} onPress={() => setSelectedDay(iso)} scaleTo={0.94}>
+                    <Text style={[s.dayChipTop, on && s.dayChipTextOn]}>Día {i + 1}</Text>
+                    <Text style={[s.dayChipDow, on && s.dayChipTextOn]}>{dow} {num}</Text>
+                  </PressScale>
+                );
+              })}
+            </ScrollView>
+
+            {activeDay && renderSections(activeDay, false)}
+          </>
+        )}
       </ScrollView>
 
       {/* Total del viaje — siempre visible, independiente del día */}
@@ -350,7 +413,7 @@ export default function TripDetailScreen() {
       <AddItemSheet
         visible={sheetOpen}
         kind={addKind}
-        day={activeDay ?? ''}
+        day={addDay}
         days={days}
         periodId={periodId}
         color={color}
@@ -377,11 +440,25 @@ const s = StyleSheet.create({
   dayChipTextOn: { color: C.white },
 
   section: { paddingHorizontal: 20, marginTop: 18 },
+  sectionC: { marginTop: 14 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 17, color: C.ink, fontFamily: FONT, fontWeight: '600', letterSpacing: -0.2 },
+  sectionTitleC: { fontSize: 15 },
   addChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.brandWash },
   addChipText: { fontSize: 13, fontFamily: FONT, fontWeight: '600' },
   sectionEmpty: { fontSize: 13.5, color: C.ink3, fontFamily: FONT, fontStyle: 'italic', paddingVertical: 4 },
+
+  // Escritorio: días en columnas
+  desktop: { paddingHorizontal: 20, marginTop: 6 },
+  pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 12 },
+  pagerBtn: { width: 32, height: 32, borderRadius: R.pill, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  pagerBtnOff: { opacity: 0.5 },
+  pagerLabel: { fontSize: 13.5, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
+  daysRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  dayCol: { flex: 1, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingBottom: 14 },
+  dayColHead: { alignItems: 'center', paddingVertical: 12, borderTopWidth: 3, borderTopLeftRadius: R.l, borderTopRightRadius: R.l, marginHorizontal: -12, marginBottom: 2, borderBottomWidth: 1, borderBottomColor: C.line },
+  dayColTop: { fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 1 },
+  dayColDow: { fontSize: 15, color: C.ink, fontFamily: FONT, fontWeight: '700' },
 
   footer: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -401,12 +478,17 @@ const s = StyleSheet.create({
 const c = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingRight: 6 },
   tap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10 },
+  tapC: { gap: 8, padding: 8 },
   pin: { width: 48, height: 48, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },
+  pinC: { width: 34, height: 34, borderRadius: 9 },
   pinGlyph: { fontSize: 22 },
+  pinGlyphC: { fontSize: 16 },
   name: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
   sub: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
   price: { fontSize: 14.5, fontFamily: FONT, fontWeight: '700', marginLeft: 8 },
+  priceC: { fontSize: 13, fontFamily: FONT, fontWeight: '700' },
   del: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  delC: { width: 26, alignSelf: 'flex-start', paddingTop: 6 },
   delText: { fontSize: 15, color: C.ink3, fontFamily: FONT },
 });
 
