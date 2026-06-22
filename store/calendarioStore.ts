@@ -8,6 +8,7 @@ export interface PeriodInput {
   end_date: string;   // YYYY-MM-DD
   label: string;
   color: string;
+  is_trip: boolean;
 }
 
 interface CalendarioState {
@@ -59,6 +60,7 @@ export const useCalendarioStore = create<CalendarioState>((set, get) => ({
       end_date: p.end_date,
       label: p.label,
       color: p.color,
+      is_trip: p.is_trip,
       created_by: userId ?? null,
       created_at: new Date().toISOString(),
     };
@@ -71,6 +73,7 @@ export const useCalendarioStore = create<CalendarioState>((set, get) => ({
           end_date: p.end_date,
           label: p.label,
           color: p.color,
+          is_trip: p.is_trip,
           created_by: userId,
         } as any)
       );
@@ -95,6 +98,7 @@ export const useCalendarioStore = create<CalendarioState>((set, get) => ({
           end_date: p.end_date,
           label: p.label,
           color: p.color,
+          is_trip: p.is_trip,
         } as any).eq('id', id)
       );
       if (error) { set({ periods: prev }); return { ok: false, error: error.message }; }

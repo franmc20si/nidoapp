@@ -5,7 +5,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
@@ -65,6 +65,7 @@ function PeriodSheet({
   const { addPeriod, updatePeriod, deletePeriod } = useCalendarioStore();
   const [label, setLabel] = useState('');
   const [color, setColor] = useState(VACATION_COLORS[0]);
+  const [isTrip, setIsTrip] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
@@ -79,6 +80,7 @@ function PeriodSheet({
     setLastKey(key);
     setLabel(period?.label ?? '');
     setColor(period?.color ?? VACATION_COLORS[0]);
+    setIsTrip(period?.is_trip ?? false);
     setError('');
   }
 
@@ -89,7 +91,7 @@ function PeriodSheet({
     if (!label.trim()) { setError('Ponle un nombre al periodo'); return; }
     setSaving(true);
     setError('');
-    const input: PeriodInput = { start_date: range.start, end_date: range.end, label: label.trim(), color };
+    const input: PeriodInput = { start_date: range.start, end_date: range.end, label: label.trim(), color, is_trip: isTrip };
     const res = isEdit
       ? await updatePeriod(period!.id, input)
       : await addPeriod(household.id, user?.id, input);
@@ -155,6 +157,16 @@ function PeriodSheet({
                 />
               ))}
             </View>
+
+            <TouchableOpacity style={s.tripRow} onPress={() => setIsTrip((v) => !v)} activeOpacity={0.8}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tripTitle}>Es un viaje ✈️</Text>
+                <Text style={s.tripHint}>Aparecerá en Viajes con planificación por días (ver/comer/dormir)</Text>
+              </View>
+              <View style={[s.toggle, isTrip && { backgroundColor: color, borderColor: color }]}>
+                <View style={[s.toggleKnob, isTrip && s.toggleKnobOn]} />
+              </View>
+            </TouchableOpacity>
 
             {error ? <Text style={s.errorText}>{error}</Text> : null}
 
@@ -224,7 +236,7 @@ function MonthCard({
           {monthPeriods.map((p) => (
             <TouchableOpacity key={p.id} style={s.legendRow} onPress={() => onDayPress(p.start_date, p)} activeOpacity={0.7}>
               <View style={[s.legendDot, { backgroundColor: p.color }]} />
-              <Text style={s.legendLabel} numberOfLines={1}>{p.label}</Text>
+              <Text style={s.legendLabel} numberOfLines={1}>{p.is_trip ? '✈️ ' : ''}{p.label}</Text>
               <Text style={s.legendRange}>{shortDate(p.start_date)} — {shortDate(p.end_date)}</Text>
             </TouchableOpacity>
           ))}
@@ -308,6 +320,9 @@ export default function CalendarioScreen() {
             <Text style={s.title}>Calendario</Text>
           </View>
           <View style={s.navRow}>
+            <TouchableOpacity style={s.tripsBtn} onPress={() => router.push('/viajes')} activeOpacity={0.85}>
+              <Text style={s.tripsBtnText}>✈️ Viajes</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[s.navBtn, monthOffset === 0 && s.navBtnDisabled]}
               disabled={monthOffset === 0}
@@ -358,9 +373,11 @@ const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 16 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
   title: { fontSize: 30, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.6 },
-  navRow: { flexDirection: 'row', gap: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   navBtn: { width: 36, height: 36, borderRadius: R.pill, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   navBtnDisabled: { opacity: 0.5 },
+  tripsBtn: { height: 36, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: C.brandWash, alignItems: 'center', justifyContent: 'center', marginRight: 2 },
+  tripsBtnText: { fontSize: 13.5, color: C.brand, fontFamily: FONT, fontWeight: '600' },
 
   pendingBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -370,20 +387,20 @@ const s = StyleSheet.create({
   pendingText: { fontSize: 13, color: C.ink2, fontFamily: FONT, fontWeight: '500' },
   pendingCancel: { fontSize: 13, color: C.brand, fontFamily: FONT, fontWeight: '600' },
 
-  monthCard: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.xl, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: C.line },
-  monthTitle: { fontSize: 18, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, marginBottom: 14 },
+  monthCard: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.xl, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 11, borderWidth: 1, borderColor: C.line },
+  monthTitle: { fontSize: 16.5, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, marginBottom: 8 },
 
-  weekHeaderRow: { flexDirection: 'row', marginBottom: 4 },
-  weekHeaderText: { flex: 1, textAlign: 'center', fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
+  weekHeaderRow: { flexDirection: 'row', marginBottom: 2 },
+  weekHeaderText: { flex: 1, textAlign: 'center', fontSize: 10.5, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
 
   weekRow: { flexDirection: 'row' },
-  dayCell: { flex: 1, aspectRatio: 1, padding: 1.5 },
+  dayCell: { flex: 1, aspectRatio: 1.32, padding: 1.5 },
   dayFill: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   dayPending: { borderWidth: 2, borderColor: C.brand },
-  dayText: { fontSize: 13, color: C.ink2, fontFamily: FONT },
+  dayText: { fontSize: 12.5, color: C.ink2, fontFamily: FONT },
   dayTextOn: { color: C.white, fontWeight: '600' },
 
-  legend: { marginTop: 14, gap: 8 },
+  legend: { marginTop: 10, gap: 6 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendLabel: { flex: 1, fontSize: 13.5, color: C.ink, fontFamily: FONT, fontWeight: '500' },
@@ -409,6 +426,13 @@ const s = StyleSheet.create({
   colorRow: { flexDirection: 'row', gap: 10, marginBottom: 22, flexWrap: 'wrap' },
   colorDot: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: 'transparent' },
   colorDotOn: { borderColor: C.ink },
+
+  tripRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 4, marginBottom: 22 },
+  tripTitle: { fontSize: 16, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 3 },
+  tripHint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, lineHeight: 17 },
+  toggle: { width: 52, height: 31, borderRadius: R.pill, backgroundColor: C.paperDeep, borderWidth: 1.5, borderColor: C.line, padding: 2, justifyContent: 'center' },
+  toggleKnob: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.white, alignSelf: 'flex-start' },
+  toggleKnobOn: { alignSelf: 'flex-end' },
 
   errorText: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
   save: { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },

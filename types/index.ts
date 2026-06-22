@@ -101,6 +101,23 @@ export interface VacationPeriod {
   end_date: string;   // YYYY-MM-DD
   label: string;
   color: string;
+  is_trip: boolean;   // periodo marcado como "viaje" → aparece en la pantalla Viajes
+  created_by: string | null;
+  created_at: string;
+}
+
+export type TripItemKind = 'ver' | 'comer' | 'dormir';
+
+export interface TripItem {
+  id: string;
+  household_id: string;
+  period_id: string;
+  day: string;        // YYYY-MM-DD
+  kind: TripItemKind;
+  title: string;
+  url: string | null;     // link de Google Maps
+  place: string | null;   // nombre del sitio extraído del link
+  sort: number;
   created_by: string | null;
   created_at: string;
 }
