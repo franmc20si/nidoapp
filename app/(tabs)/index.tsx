@@ -15,6 +15,7 @@ import NidoSheet from '@/components/NidoSheet';
 import StaggerItem from '@/components/StaggerItem';
 import { isDueAgain, nextDueDate } from '@/lib/recurrence';
 import { withTimeout, readWithRetry } from '@/lib/withTimeout';
+import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import { getServiceCat } from '@/constants/services';
 
@@ -172,7 +173,21 @@ export default function HoyScreen() {
         .eq('week_key', wk)
     );
     if (!checksErr) {
-      setRecipeChecked(new Set((checksData ?? []).map((r: any) => r.item_key)));
+      let set = new Set<string>((checksData ?? []).map((r: any) => r.item_key));
+      // Migración de formato de clave (nombres → ids estables) de esta semana.
+      const plan = weeklyPlans[wk] ?? {};
+      const pairs: { oldKey: string; newKey: string }[] = [];
+      Object.values(plan).forEach(rid => {
+        const recipe = recipeById(rid);
+        recipe?.ingredients?.forEach(ing => {
+          pairs.push({
+            oldKey: `ri-${recipe.name}-${ing.name}`,
+            newKey: recipeCheckKey(recipe.id, ing.id),
+          });
+        });
+      });
+      set = await migrateRecipeCheckKeys(household.id, wk, pairs, set);
+      setRecipeChecked(set);
     }
 
     // 2. Productos manuales sin comprar (Supabase)
@@ -248,7 +263,7 @@ export default function HoyScreen() {
         const key = `${ing.name.toLowerCase()}|${ing.category}`;
         if (seen.has(key)) return;
         seen.add(key);
-        const id = `ri-${recipe.name}-${ing.name}`;
+        const id = recipeCheckKey(recipe.id, ing.id);
         if (recipeChecked.has(id)) return; // ya comprado
         out.push({ id, name: ing.name, unit: ing.amount ?? null });
       });

@@ -83,7 +83,7 @@ export default function MenuScreen() {
   // ── compute ingredient list for this week ──────────────────────────────
   const weekIngredients = (() => {
     const seen = new Set<string>();
-    const result: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string }[] = [];
+    const result: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string; recipeId: string; ingredientId: string }[] = [];
     Object.values(plan).forEach(rid => {
       const recipe = recipeById(rid);
       if (!recipe?.ingredients?.length) return;
@@ -91,7 +91,7 @@ export default function MenuScreen() {
         const key = `${ing.name.toLowerCase()}|${ing.category}`;
         if (seen.has(key)) return;
         seen.add(key);
-        result.push({ name: ing.name, amount: ing.amount, category: ing.category, recipeColor: recipe.color, recipeName: recipe.name });
+        result.push({ name: ing.name, amount: ing.amount, category: ing.category, recipeColor: recipe.color, recipeName: recipe.name, recipeId: recipe.id, ingredientId: ing.id });
       });
     });
     return result;

@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FONT } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { withTimeout, readWithRetry } from '@/lib/withTimeout';
+import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
 
@@ -110,7 +111,7 @@ interface Props {
   onClose: () => void;
   weekKey: string;         // e.g. "2026-W22"
   weekLabel: string;       // e.g. "Semana 22"
-  recipeItems: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string }[];
+  recipeItems: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string; recipeId: string; ingredientId: string }[];
   accent: { hex: string; wash: string };
   householdId: string;
 }
@@ -156,7 +157,17 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
         }
         if (migOk) await AsyncStorage.setItem(migKey, '1');
       }
-      setChecked(recipeChecked);
+      // Migración de formato de clave (nombres → ids estables) de esta semana.
+      const remapped = await migrateRecipeCheckKeys(
+        householdId,
+        weekKey,
+        recipeItems.map(r => ({
+          oldKey: `ri-${r.recipeName}-${r.name}`,
+          newKey: recipeCheckKey(r.recipeId, r.ingredientId),
+        })),
+        recipeChecked,
+      );
+      setChecked(remapped);
 
       // Get or create the shopping_list record for this week.
       // Si la lectura falla NO seguimos: crear otra lista duplicaría la semana
@@ -290,11 +301,11 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   // Build merged item list
   const allItems: ShoppingItem[] = [
     ...recipeItems.map((r) => ({
-      id: `ri-${r.recipeName}-${r.name}`,
+      id: recipeCheckKey(r.recipeId, r.ingredientId),
       name: r.name,
       amount: r.amount,
       category: r.category,
-      checked: checked.has(`ri-${r.recipeName}-${r.name}`),
+      checked: checked.has(recipeCheckKey(r.recipeId, r.ingredientId)),
       source: 'recipe' as const,
       recipeColor: r.recipeColor,
       recipeName: r.recipeName,
