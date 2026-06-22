@@ -29,6 +29,12 @@ function pad2(n: number) { return String(n).padStart(2, '0'); }
 function toIso(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function shortDate(iso: string) { const [, m, d] = iso.split('-').map(Number); return `${d} ${MONTH_SHORT[m - 1]}`; }
 
+function money(n: number) { return n.toFixed(2).replace('.', ',') + ' €'; }
+function parsePrice(s: string): number | null {
+  const v = parseFloat(s.replace(',', '.').replace(/[^0-9.]/g, ''));
+  return isNaN(v) ? null : v;
+}
+
 function tripDays(start: string, end: string): string[] {
   const out: string[] = [];
   const d = new Date(start + 'T00:00:00');
@@ -57,6 +63,7 @@ function AddItemSheet({
   const { addItem } = useTripStore();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
+  const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -65,7 +72,7 @@ function AddItemSheet({
   const [lastKey, setLastKey] = useState('closed');
   if (visible && key !== lastKey) {
     setLastKey(key);
-    setTitle(''); setUrl(''); setError(''); setSaving(false);
+    setTitle(''); setUrl(''); setPrice(''); setError(''); setSaving(false);
   }
 
   if (!kind) return null;
@@ -93,6 +100,7 @@ function AddItemSheet({
       title: title.trim() || place || 'Sitio',
       url: clean || null,
       place,
+      price: parsePrice(price),
     };
     const res = await addItem(household.id, user?.id, periodId, input);
     setSaving(false);
@@ -122,6 +130,15 @@ function AddItemSheet({
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
+        />
+        <TextInput
+          style={a.field}
+          placeholder="Precio (opcional, ej. 12,50)"
+          placeholderTextColor={C.ink3}
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="decimal-pad"
+          inputMode="decimal"
         />
         <Text style={a.hint}>Pega el enlace de “Compartir” de Google Maps. Mostraremos el sitio con un pin y, al tocarlo, se abrirá en Maps.</Text>
 
@@ -153,6 +170,7 @@ function ItemCard({ item, color, onDelete }: { item: TripItem; color: string; on
             {item.url ? (item.place ?? 'Ver en Google Maps') : 'Sin enlace'}
           </Text>
         </View>
+        {item.price != null && <Text style={[c.price, { color }]}>{money(item.price)}</Text>}
       </PressScale>
       <TouchableOpacity style={c.del} onPress={onDelete} hitSlop={8}>
         <Text style={c.delText}>✕</Text>
@@ -191,6 +209,8 @@ export default function TripDetailScreen() {
 
   const items = itemsByPeriod[periodId] ?? [];
   const color = period?.color ?? accent.hex;
+  // Total del viaje entero (todos los días y categorías), siempre visible al pie.
+  const tripTotal = items.reduce((acc, it) => acc + (it.price ?? 0), 0);
 
   const openAdd = (kind: TripItemKind) => { setAddKind(kind); setSheetOpen(true); };
 
@@ -229,7 +249,7 @@ export default function TripDetailScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView showsVerticalScrollIndicator={false} alwaysBounceVertical={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} alwaysBounceVertical={false} contentContainerStyle={{ paddingBottom: 28 }}>
         {/* Cabecera */}
         <View style={s.topbar}>
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7} hitSlop={8}>
@@ -281,6 +301,12 @@ export default function TripDetailScreen() {
         })}
       </ScrollView>
 
+      {/* Total del viaje — siempre visible, independiente del día */}
+      <View style={s.footer}>
+        <Text style={s.footerLabel}>Total del viaje</Text>
+        <Text style={[s.footerTotal, { color }]}>{money(tripTotal)}</Text>
+      </View>
+
       <AddItemSheet
         visible={sheetOpen}
         kind={addKind}
@@ -316,6 +342,14 @@ const s = StyleSheet.create({
   addChipText: { fontSize: 13, fontFamily: FONT, fontWeight: '600' },
   sectionEmpty: { fontSize: 13.5, color: C.ink3, fontFamily: FONT, fontStyle: 'italic', paddingVertical: 4 },
 
+  footer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 22, paddingVertical: 16,
+    backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.line,
+  },
+  footerLabel: { fontSize: 14, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
+  footerTotal: { fontSize: 20, fontFamily: FONT, fontWeight: '700', letterSpacing: -0.4 },
+
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   notFoundEmoji: { fontSize: 44, marginBottom: 14 },
   notFoundTitle: { fontSize: 19, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 16 },
@@ -330,6 +364,7 @@ const c = StyleSheet.create({
   pinGlyph: { fontSize: 22 },
   name: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
   sub: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
+  price: { fontSize: 14.5, fontFamily: FONT, fontWeight: '700', marginLeft: 8 },
   del: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   delText: { fontSize: 15, color: C.ink3, fontFamily: FONT },
 });

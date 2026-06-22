@@ -117,6 +117,7 @@ export interface TripItem {
   title: string;
   url: string | null;     // link de Google Maps
   place: string | null;   // nombre del sitio extraído del link
+  price: number | null;   // precio opcional del sitio
   sort: number;
   created_by: string | null;
   created_at: string;
