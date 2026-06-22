@@ -251,6 +251,11 @@ export default function TripDetailScreen() {
   const { width: winW } = useWindowDimensions();
   const isWide = winW >= 920;
   const PER_PAGE = 7;
+  // Ancho de columna FIJO (basado en 7 por fila) para que las cards midan igual
+  // en todas las semanas, aunque la última página tenga menos de 7 días.
+  const DESKTOP_PAD = 20;
+  const COL_GAP = 12;
+  const colW = Math.floor((winW - DESKTOP_PAD * 2 - COL_GAP * (PER_PAGE - 1)) / PER_PAGE);
   const totalPages = Math.max(1, Math.ceil(days.length / PER_PAGE));
   const safePage = Math.min(page, totalPages - 1);
   const pageDays = isWide ? days.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE) : [];
@@ -372,7 +377,7 @@ export default function TripDetailScreen() {
                 const { dow, num } = dayChipLabel(iso);
                 const idx = days.indexOf(iso);
                 return (
-                  <View key={iso} style={s.dayCol}>
+                  <View key={iso} style={[s.dayCol, { width: colW }]}>
                     <View style={[s.dayColHead, { borderTopColor: color }]}>
                       <Text style={s.dayColTop}>Día {idx + 1}</Text>
                       <Text style={s.dayColDow}>{dow} {num}</Text>
@@ -454,8 +459,8 @@ const s = StyleSheet.create({
   pagerBtn: { width: 32, height: 32, borderRadius: R.pill, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   pagerBtnOff: { opacity: 0.5 },
   pagerLabel: { fontSize: 13.5, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
-  daysRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  dayCol: { flex: 1, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingBottom: 14 },
+  daysRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
+  dayCol: { backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingBottom: 14 },
   dayColHead: { alignItems: 'center', paddingVertical: 12, borderTopWidth: 3, borderTopLeftRadius: R.l, borderTopRightRadius: R.l, marginHorizontal: -12, marginBottom: 2, borderBottomWidth: 1, borderBottomColor: C.line },
   dayColTop: { fontSize: 11, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 1 },
   dayColDow: { fontSize: 15, color: C.ink, fontFamily: FONT, fontWeight: '700' },
