@@ -15,7 +15,7 @@ import { withTimeout } from '@/lib/withTimeout';
 type Step = 'choose' | 'create' | 'join' | 'created';
 
 export default function OnboardingScreen() {
-  const { user, setHousehold } = useAuthStore();
+  const { user, setHousehold, signOut } = useAuthStore();
   const [step, setStep]                 = useState<Step>('choose');
   const [householdName, setHouseholdName] = useState('');
   const [colorKey, setColorKey]          = useState(NIDO_COLORS[0].key);
@@ -126,6 +126,10 @@ export default function OnboardingScreen() {
               <Text style={s.cardDesc}>Tengo un código de invitación</Text>
             </View>
             <Text style={s.cardCaret}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={s.signOutLink} onPress={signOut} activeOpacity={0.7}>
+            <Text style={s.signOutLinkText}>¿Cuenta de Google equivocada? Cerrar sesión</Text>
           </TouchableOpacity>
 
         </ScrollView>
@@ -306,6 +310,9 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '500', color: C.ink, fontFamily: FONT },
   cardDesc:  { fontSize: 13, color: C.ink3, fontFamily: FONT, marginTop: 2 },
   cardCaret: { fontSize: 22, color: C.ink3 },
+
+  signOutLink: { marginTop: 20, alignItems: 'center' },
+  signOutLinkText: { fontSize: 13, color: C.ink3, fontFamily: FONT, textDecorationLine: 'underline' },
 
   backRow: { marginBottom: 20 },
   backText: { color: C.brand, fontWeight: '500', fontFamily: FONT, fontSize: 15 },
