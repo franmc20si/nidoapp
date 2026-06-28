@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Tabs } from 'expo-router';
 import {
   View, Text, TouchableOpacity, TextInput, StyleSheet,
-  ActivityIndicator, ScrollView,
+  ActivityIndicator, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { CATS } from '@/constants/categories';
@@ -36,6 +36,10 @@ function IconMenuTab({ active, accent }: { active: boolean; accent: string }) {
 function IconCalendarTab({ active, accent }: { active: boolean; accent: string }) {
   return <IcoCalendar size={22} color={active ? accent : C.ink3} fill="transparent" strokeWidth={active ? 2.6 : 2} />;
 }
+
+// A partir de este ancho la navegación pasa de barra inferior (móvil) a
+// sidebar lateral izquierda (escritorio).
+const DESKTOP_BP = 900;
 
 const TIMES = [
   { label: '15 min', min: 15 },
@@ -218,22 +222,72 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
   );
 }
 
+// Orden de las pestañas. En móvil 'Semana' va al centro (tab destacada);
+// en el sidebar de escritorio lo dejamos arriba como inicio natural.
+const MOBILE_TABS = [
+  { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
+  { name: 'nido',    label: 'Nido',    Icon: IconNest },
+  { name: 'index',   label: 'Semana',  Icon: IconHome },
+  { name: 'servicios', label: 'Servicios', Icon: IconChart },
+  { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
+];
+const DESKTOP_TABS = [
+  { name: 'index',   label: 'Semana',  Icon: IconHome },
+  { name: 'nido',    label: 'Nido',    Icon: IconNest },
+  { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
+  { name: 'servicios', label: 'Servicios', Icon: IconChart },
+  { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
+];
+
+function DesktopSidebar({ state, navigation, accent }: any) {
+  return (
+    <View style={tb.sidebar}>
+      <View style={tb.brand}>
+        <IcoNest size={24} color={accent.hex} fill="transparent" strokeWidth={2.4} />
+        <Text style={[tb.brandText, { color: accent.hex }]}>Nido</Text>
+      </View>
+
+      {DESKTOP_TABS.map((tab) => {
+        const routeIndex = state.routes.findIndex((r: any) => r.name === tab.name);
+        const focused = state.index === routeIndex;
+        const { Icon } = tab;
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            style={[tb.navItem, focused && { backgroundColor: accent.hex + '18' }]}
+            onPress={() => navigation.navigate(tab.name)}
+            activeOpacity={0.7}
+          >
+            {Icon && <Icon active={focused} accent={accent.hex} />}
+            <Text style={[tb.navLabel, { color: focused ? accent.hex : C.ink2, fontWeight: focused ? '600' : '500' }]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 function CustomTabBar({ state, navigation }: any) {
   const { accent, fabOpen, closeFab } = useNidoStore();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BP;
 
-  const TABS = [
-    { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
-    { name: 'nido',    label: 'Nido',    Icon: IconNest },
-    { name: 'index',   label: 'Semana',  Icon: IconHome },
-    { name: 'servicios', label: 'Servicios', Icon: IconChart },
-    { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
-  ];
+  if (isDesktop) {
+    return (
+      <>
+        <AddSheet visible={fabOpen} onClose={closeFab} />
+        <DesktopSidebar state={state} navigation={navigation} accent={accent} />
+      </>
+    );
+  }
 
   return (
     <>
       <AddSheet visible={fabOpen} onClose={closeFab} />
       <View style={tb.bar}>
-        {TABS.map((tab) => {
+        {MOBILE_TABS.map((tab) => {
           const routeIndex = state.routes.findIndex((r: any) => r.name === tab.name);
           const focused = state.index === routeIndex;
           const { Icon } = tab;
@@ -266,14 +320,27 @@ function CustomTabBar({ state, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= DESKTOP_BP;
+  const tabBarPosition = isDesktop ? 'left' : 'bottom';
+  // En escritorio centramos el contenido con ancho máximo para que no se
+  // estire de borde a borde. Solo en las pantallas que no auto-gestionan su
+  // anchura: calendario calcula sus columnas con el ancho de ventana completo,
+  // así que se deja a ancho completo.
+  const centeredScene = isDesktop
+    ? { maxWidth: 900, width: '100%' as const, alignSelf: 'center' as const }
+    : undefined;
   return (
     <>
-      <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="index" />
-        <Tabs.Screen name="nido" />
-        <Tabs.Screen name="servicios" />
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false, tabBarPosition }}
+      >
+        <Tabs.Screen name="index" options={{ sceneStyle: centeredScene }} />
+        <Tabs.Screen name="nido" options={{ sceneStyle: centeredScene }} />
+        <Tabs.Screen name="servicios" options={{ sceneStyle: centeredScene }} />
         <Tabs.Screen name="reparto" options={{ href: null }} />
-        <Tabs.Screen name="menu" />
+        <Tabs.Screen name="menu" options={{ sceneStyle: centeredScene }} />
         <Tabs.Screen name="calendario" />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>
@@ -300,6 +367,24 @@ const tb = StyleSheet.create({
   ico: { fontSize: 22, opacity: 0.35 },
   icoOn: { opacity: 1 },
   tabLabel: { fontSize: 10, fontFamily: FONT, fontWeight: '500' },
+
+  // Sidebar (escritorio ≥ 900px)
+  sidebar: {
+    width: 232,
+    backgroundColor: C.paper,
+    borderRightWidth: 1,
+    borderRightColor: C.line,
+    paddingTop: 28,
+    paddingHorizontal: 14,
+    gap: 4,
+  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, marginBottom: 24 },
+  brandText: { fontSize: 22, fontWeight: '600', fontFamily: FONT, letterSpacing: -0.5 },
+  navItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 14, paddingVertical: 13, borderRadius: R.l,
+  },
+  navLabel: { fontSize: 15, fontFamily: FONT },
 
   // Sheet
   sheetScroll: { },

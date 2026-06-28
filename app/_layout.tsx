@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -7,6 +7,7 @@ import * as Font from 'expo-font';
 import { supabase } from '@/lib/supabase';
 import { ensureProfile, resolveDestination } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
+import { C } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -62,15 +63,15 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: C.paperDeep }}>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="bancos" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viajes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viaje/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       </Stack>
-    </>
+    </View>
   );
 }
