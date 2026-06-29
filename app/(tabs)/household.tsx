@@ -10,6 +10,9 @@ import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
+import { nidoColorByKey } from '@/constants/nidoColors';
+import { Household } from '@/types';
+import NidoSheet from '@/components/NidoSheet';
 
 function computeStreak(completedDates: (string | null)[]): number {
   const daySet = new Set(
@@ -28,8 +31,8 @@ function computeStreak(completedDates: (string | null)[]): number {
 }
 
 export default function ProfileScreen() {
-  const { profile, household, user, setProfile, signOut } = useAuthStore();
-  const { accent } = useNidoStore();
+  const { profile, household, user, setProfile, setHousehold, signOut } = useAuthStore();
+  const { accent, loadAccent } = useNidoStore();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.full_name ?? '');
@@ -41,8 +44,36 @@ export default function ProfileScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [stats, setStats] = useState({ tareas: '—', racha: '—', aportacion: '—' });
+  const [myNidos, setMyNidos] = useState<Household[]>([]);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const [nidoSheet, setNidoSheet] = useState<null | 'manage' | 'add'>(null);
 
   useEffect(() => { setNameVal(profile?.full_name ?? ''); }, [profile]);
+
+  // Todos los nidos a los que pertenece el usuario (para poder cambiar entre ellos)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('household_members')
+        .select('households(*)')
+        .eq('user_id', user.id);
+      if (cancelled || !data) return;
+      const list = data.map((r: any) => r.households).filter(Boolean) as Household[];
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setMyNidos(list);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, household?.id]);
+
+  const switchNido = async (h: Household) => {
+    if (h.id === household?.id) return;
+    setSwitchingId(h.id);
+    setHousehold(h);
+    await loadAccent(h.id);
+    setSwitchingId(null);
+  };
 
   useEffect(() => {
     if (!user || !household) return;
@@ -170,15 +201,24 @@ export default function ProfileScreen() {
 
   const confirmResetAction = async () => {
     setConfirmReset(false);
-    // Remove from household_members in DB so the user can join/create another
+    // Quita al usuario del nido actual en la BD para que pueda crear/unirse a otro
     if (user && household) {
       await supabase.from('household_members')
         .delete()
         .eq('household_id', household.id)
         .eq('user_id', user.id);
     }
-    useAuthStore.setState({ household: null });
-    router.replace('/(auth)/onboarding');
+    // Si quedan otros nidos, cambia a uno de ellos; si no, vuelve al onboarding.
+    const remaining = myNidos.filter((h) => h.id !== household?.id);
+    if (remaining.length > 0) {
+      const next = remaining[0];
+      setHousehold(next);
+      await loadAccent(next.id);
+      setMyNidos(remaining);
+    } else {
+      setHousehold(null);
+      router.replace('/(auth)/onboarding');
+    }
   };
 
   // ── sign out ──────────────────────────────────────────────────────────────
@@ -264,18 +304,48 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* Household card */}
-        {household && (
+        {/* Mis nidos — lista + cambio */}
+        {myNidos.length > 0 && (
           <View style={[s.card, { borderColor: accent.hex + '30' }]}>
-            <Text style={s.cardLabel}>MI NIDO ACTIVO</Text>
-            <View style={s.cardRow}>
-              <Text style={s.cardTitle}>{household.name}</Text>
-              <View style={[s.colorDot, { backgroundColor: accent.hex }]} />
-            </View>
-            {household.invite_code && (
+            <Text style={s.cardLabel}>MIS NIDOS</Text>
+            {myNidos.map((h) => {
+              const active = h.id === household?.id;
+              const dot = nidoColorByKey((h as any).accent_color).hex;
+              return (
+                <TouchableOpacity
+                  key={h.id}
+                  style={[s.nidoRow, active && { borderColor: accent.hex, backgroundColor: accent.hex + '0D' }]}
+                  onPress={() => switchNido(h)}
+                  activeOpacity={0.7}
+                  disabled={active || !!switchingId}
+                >
+                  <View style={[s.colorDot, { backgroundColor: dot }]} />
+                  <Text style={[s.nidoRowName, active && { color: accent.hex, fontWeight: '600' }]} numberOfLines={1}>
+                    {h.name}
+                  </Text>
+                  {switchingId === h.id ? (
+                    <ActivityIndicator size="small" color={accent.hex} />
+                  ) : active ? (
+                    <Text style={[s.nidoRowTag, { color: accent.hex }]}>Activo</Text>
+                  ) : (
+                    <Text style={s.nidoRowSwitch}>Cambiar ›</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity style={s.addNidoBtn} onPress={() => setNidoSheet('add')} activeOpacity={0.7}>
+              <View style={[s.addNidoIcon, { backgroundColor: accent.hex + '15' }]}>
+                <Text style={[s.addNidoIconText, { color: accent.hex }]}>+</Text>
+              </View>
+              <Text style={s.addNidoText}>Añadir o unirme a otro nido</Text>
+            </TouchableOpacity>
+
+            {/* Código de invitación del nido activo */}
+            {household?.invite_code && (
               <>
                 <View style={s.codeRow}>
-                  <Text style={s.codePre}>Código de invitación</Text>
+                  <Text style={s.codePre}>Código de {household.name}</Text>
                   <Text style={[s.code, { color: accent.hex }]}>{household.invite_code}</Text>
                 </View>
                 <View style={s.codeActions}>
@@ -303,15 +373,15 @@ export default function ProfileScreen() {
 
         {/* Settings rows */}
         <View style={s.settingsCard}>
-          <TouchableOpacity style={s.settingsRow} onPress={() => router.push('/(tabs)/household')} activeOpacity={0.7}>
+          <TouchableOpacity style={s.settingsRow} onPress={() => setNidoSheet('manage')} activeOpacity={0.7}>
             <Text style={s.settingsIcon}>⚙️</Text>
             <Text style={s.settingsLabel}>Configurar nido</Text>
             <Text style={s.settingsCaret}>›</Text>
           </TouchableOpacity>
           <View style={s.divider} />
           <TouchableOpacity style={s.settingsRow} onPress={resetOnboarding} activeOpacity={0.7}>
-            <Text style={s.settingsIcon}>🔄</Text>
-            <Text style={s.settingsLabel}>Resetear onboarding</Text>
+            <Text style={s.settingsIcon}>🚪</Text>
+            <Text style={s.settingsLabel}>Salir de este nido</Text>
             <Text style={s.settingsCaret}>›</Text>
           </TouchableOpacity>
         </View>
@@ -324,8 +394,12 @@ export default function ProfileScreen() {
         {/* Inline confirm: reset onboarding */}
         {confirmReset && (
           <View style={s.confirmBox}>
-            <Text style={s.confirmTitle}>¿Salir del nido?</Text>
-            <Text style={s.confirmSub}>Saldrás del nido actual y volverás al inicio.</Text>
+            <Text style={s.confirmTitle}>¿Salir de este nido?</Text>
+            <Text style={s.confirmSub}>
+              {myNidos.filter((h) => h.id !== household?.id).length > 0
+                ? 'Dejarás de ser miembro de este nido y pasarás a otro de tus nidos.'
+                : 'Dejarás de ser miembro de este nido y volverás al inicio.'}
+            </Text>
             <View style={s.confirmRow}>
               <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmReset(false)}>
                 <Text style={s.confirmCancelText}>Cancelar</Text>
@@ -353,6 +427,12 @@ export default function ProfileScreen() {
           </View>
         )}
       </ScrollView>
+
+      <NidoSheet
+        visible={nidoSheet !== null}
+        initialMode={nidoSheet ?? 'manage'}
+        onClose={() => setNidoSheet(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -396,6 +476,16 @@ const s = StyleSheet.create({
   codeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   codeBtn: { flex: 1, borderRadius: R.l, borderWidth: 1, paddingVertical: 9, alignItems: 'center' },
   codeBtnText: { fontSize: 13, fontWeight: '600', fontFamily: FONT },
+
+  nidoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 14, paddingVertical: 13, marginTop: 8 },
+  nidoRowName: { flex: 1, fontSize: 15, fontWeight: '500', color: C.ink, fontFamily: FONT },
+  nidoRowTag: { fontSize: 12, fontWeight: '600', fontFamily: FONT },
+  nidoRowSwitch: { fontSize: 13, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
+
+  addNidoBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  addNidoIcon: { width: 32, height: 32, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },
+  addNidoIconText: { fontSize: 20, fontWeight: '400', lineHeight: 24 },
+  addNidoText: { fontSize: 14, fontWeight: '600', color: C.ink2, fontFamily: FONT },
 
   settingsCard: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 18, marginBottom: 14 },
   settingsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 },

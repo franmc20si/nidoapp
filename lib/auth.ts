@@ -1,5 +1,6 @@
 import { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { getActiveHouseholdId } from './activeHousehold';
 
 export async function ensureProfile(user: User) {
   const { data: existing } = await supabase
@@ -24,12 +25,17 @@ export async function resolveDestination(userId: string) {
   const { data } = await supabase
     .from('household_members')
     .select('household_id, households(*)')
-    .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle();
+    .eq('user_id', userId);
 
-  if (data?.households) {
-    return { route: '/(tabs)' as const, household: data.households as any };
+  const memberships = (data ?? []).filter((r: any) => r.households);
+  if (memberships.length === 0) {
+    return { route: '/(auth)/onboarding' as const, household: null };
   }
-  return { route: '/(auth)/onboarding' as const, household: null };
+
+  // Vuelve al último nido activo si el usuario sigue siendo miembro;
+  // si no, al primero disponible.
+  const savedId = await getActiveHouseholdId();
+  const chosen =
+    memberships.find((r: any) => r.household_id === savedId) ?? memberships[0];
+  return { route: '/(tabs)' as const, household: chosen.households as any };
 }

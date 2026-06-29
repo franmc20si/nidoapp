@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { setActiveHouseholdId } from '@/lib/activeHousehold';
 import { Profile, Household } from '@/types';
 
 interface AuthState {
@@ -31,12 +32,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setProfile: (profile) => set({ profile }),
 
-  setHousehold: (household) => set({ household }),
+  setHousehold: (household) => {
+    setActiveHouseholdId(household?.id ?? null);
+    set({ household });
+  },
 
   setHomeReady: (ready) => set({ homeReady: ready }),
 
   signOut: async () => {
     await supabase.auth.signOut();
+    setActiveHouseholdId(null);
     set({ session: null, user: null, profile: null, household: null, homeReady: false });
   },
 
