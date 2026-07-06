@@ -69,6 +69,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="bancos" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+        <Stack.Screen name="casas" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viajes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viaje/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       </Stack>

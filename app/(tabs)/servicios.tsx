@@ -6,6 +6,7 @@ import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useBanksStore } from '@/store/banksStore';
+import { useHousesStore } from '@/store/housesStore';
 import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
 import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from '@/constants/services';
@@ -41,6 +42,7 @@ export default function ServiciosScreen() {
   const { accent } = useNidoStore();
   const { household } = useAuthStore();
   const { banks, loadBanks } = useBanksStore();
+  const { houses, loadHouses } = useHousesStore();
   const [subs, setSubs]           = useState<Subscription[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
@@ -48,6 +50,8 @@ export default function ServiciosScreen() {
   const [loading, setLoading]       = useState(true);
   const [loaded, setLoaded]         = useState(false);
   const [loadError, setLoadError]   = useState(false);
+  // Filtro por casa: 'all' = todas · 'none' = sin casa · <id> = una casa concreta
+  const [houseFilter, setHouseFilter] = useState<'all' | 'none' | string>('all');
 
   const fetchSubs = async () => {
     if (!household) return;
@@ -74,18 +78,26 @@ export default function ServiciosScreen() {
 
   useFocusEffect(useCallback(() => {
     fetchSubs();
-    if (household) loadBanks(household.id);
+    if (household) { loadBanks(household.id); loadHouses(household.id); }
   }, [household?.id]));
 
   const openNew = () => { setEditingSub(null); setSheetOpen(true); };
   const openEdit = (s: Subscription) => { setEditingSub(s); setSheetOpen(true); };
 
-  const totalMonthly = subs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
-  const upcoming = subs.filter(s => { const d = daysUntil(s.next_payment); return d !== null && d <= 7; });
+  // Aplicar filtro de casa: los totales y la lista se recalculan sobre este subconjunto.
+  const visibleSubs = houseFilter === 'all'
+    ? subs
+    : subs.filter(s => (s.house_id ?? null) === (houseFilter === 'none' ? null : houseFilter));
+
+  const totalMonthly = visibleSubs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
+  const upcoming = visibleSubs.filter(s => { const d = daysUntil(s.next_payment); return d !== null && d <= 7; });
+
+  // Nº de servicios sin casa (para el chip "Sin casa")
+  const noHouseCount = subs.filter(s => !s.house_id).length;
 
   // Agrupar por categoría en el orden definido
   const byCat: Record<string, Subscription[]> = {};
-  for (const s of subs) {
+  for (const s of visibleSubs) {
     const k = s.category ?? 'otros';
     if (!byCat[k]) byCat[k] = [];
     byCat[k].push(s);
@@ -121,8 +133,11 @@ export default function ServiciosScreen() {
             <Text style={s.title}>Servicios</Text>
           </View>
           <View style={s.actions}>
-            <TouchableOpacity style={s.bankBtn} onPress={() => router.push('/bancos')} activeOpacity={0.8}>
-              <Text style={s.bankBtnText}>🏦 Bancos</Text>
+            <TouchableOpacity style={s.utilBtn} onPress={() => router.push('/casas')} activeOpacity={0.8}>
+              <Text style={s.utilBtnText}>🏠 Casas</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.utilBtn} onPress={() => router.push('/bancos')} activeOpacity={0.8}>
+              <Text style={s.utilBtnText}>🏦 Bancos</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>
               <Text style={s.addBtnText}>+ Añadir</Text>
@@ -130,14 +145,58 @@ export default function ServiciosScreen() {
           </View>
         </View>
 
+        {/* Filtro por casa */}
+        {houses.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.filterRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={[s.filterChip, houseFilter === 'all' && { backgroundColor: accent.hex, borderColor: accent.hex }]}
+              onPress={() => setHouseFilter('all')}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.filterChipText, houseFilter === 'all' && { color: C.white }]}>Todas</Text>
+            </TouchableOpacity>
+            {houses.map((h) => {
+              const on = houseFilter === h.id;
+              const col = nidoColorByKey(h.color);
+              return (
+                <TouchableOpacity
+                  key={h.id}
+                  style={[s.filterChip, on && { borderColor: col.hex, backgroundColor: col.wash }]}
+                  onPress={() => setHouseFilter(h.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[s.filterDot, { backgroundColor: col.hex }]} />
+                  <Text style={[s.filterChipText, on && { color: col.hex }]}>{h.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            {noHouseCount > 0 && (
+              <TouchableOpacity
+                style={[s.filterChip, houseFilter === 'none' && { backgroundColor: C.ink, borderColor: C.ink }]}
+                onPress={() => setHouseFilter('none')}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.filterChipText, houseFilter === 'none' && { color: C.white }]}>Sin casa</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        )}
+
         {/* Resumen mensual */}
         <View style={s.summaryCard}>
           <View style={s.summaryLeft}>
-            <Text style={s.summaryLabel}>Total mensual estimado</Text>
+            <Text style={s.summaryLabel}>
+              {houseFilter === 'all' ? 'Total mensual estimado' : 'Total de esta selección'}
+            </Text>
             <Text style={[s.summaryAmount, { color: accent.hex }]}>
               {totalMonthly.toFixed(2).replace('.', ',')} €
             </Text>
-            <Text style={s.summaryCount}>{subs.length} {subs.length === 1 ? 'servicio' : 'servicios'} activos</Text>
+            <Text style={s.summaryCount}>{visibleSubs.length} {visibleSubs.length === 1 ? 'servicio' : 'servicios'} activos</Text>
           </View>
           <View style={s.summaryRight}>
             <Text style={s.summaryRightLabel}>Anual estimado</Text>
@@ -177,6 +236,10 @@ export default function ServiciosScreen() {
               <Text style={s.emptyBtnText}>Añadir primer servicio</Text>
             </TouchableOpacity>
           </View>
+        ) : visibleSubs.length === 0 ? (
+          <View style={s.filterEmpty}>
+            <Text style={s.filterEmptyText}>No hay servicios en esta selección.</Text>
+          </View>
         ) : (
           orderedCats.map(catKey => {
             const cat   = getServiceCat(catKey);
@@ -194,6 +257,7 @@ export default function ServiciosScreen() {
                   const uCol  = urgencyColor(days);
                   const cycle = getCycle(sub.cycle);
                   const bank  = sub.bank_id ? banks.find(b => b.id === sub.bank_id) : null;
+                  const house = sub.house_id ? houses.find(h => h.id === sub.house_id) : null;
                   return (
                     <TouchableOpacity
                       key={sub.id}
@@ -204,6 +268,12 @@ export default function ServiciosScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.subName}>{sub.name}</Text>
                         <View style={s.subMeta}>
+                          {house ? (
+                            <View style={s.subBankWrap}>
+                              <View style={[s.subBankDot, { backgroundColor: nidoColorByKey(house.color).hex }]} />
+                              <Text style={s.subBank}>🏠 {house.name}</Text>
+                            </View>
+                          ) : null}
                           {bank ? (
                             <View style={s.subBankWrap}>
                               <View style={[s.subBankDot, { backgroundColor: nidoColorByKey(bank.color).hex }]} />
@@ -258,11 +328,19 @@ const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title:   { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bankBtn: { borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.ink },
-  bankBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  utilBtn: { borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.ink },
+  utilBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
   addBtn:  { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
+
+  filterRow:      { gap: 8, paddingHorizontal: 20, paddingBottom: 12 },
+  filterChip:     { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: C.card },
+  filterDot:      { width: 9, height: 9, borderRadius: 5 },
+  filterChipText: { fontSize: 13.5, fontWeight: '600', color: C.ink2, fontFamily: FONT },
+
+  filterEmpty:     { alignItems: 'center', paddingTop: 32, paddingHorizontal: 32 },
+  filterEmptyText: { fontSize: 14, color: C.ink3, fontFamily: FONT, textAlign: 'center' },
 
   summaryCard: {
     marginHorizontal: 20, marginBottom: 14,

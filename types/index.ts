@@ -80,6 +80,15 @@ export interface Bank {
   created_at: string;
 }
 
+export interface House {
+  id: string;
+  household_id: string;
+  name: string;
+  color: string;            // clave de NIDO_COLORS (teja | terracota | cielo | bosque | iris)
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Subscription {
   id: string;
   household_id: string;
@@ -90,6 +99,7 @@ export interface Subscription {
   next_payment: string | null;
   bank_account: string | null; // texto libre heredado (reemplazado por bank_id)
   bank_id: string | null;      // banco asignado → tabla banks
+  house_id: string | null;     // casa/vivienda asignada → tabla houses
   created_by: string | null;
   created_at: string;
 }

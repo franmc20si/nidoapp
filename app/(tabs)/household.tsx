@@ -11,7 +11,6 @@ import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 import { nidoColorByKey } from '@/constants/nidoColors';
-import { Household } from '@/types';
 import NidoSheet from '@/components/NidoSheet';
 
 function computeStreak(completedDates: (string | null)[]): number {
@@ -32,7 +31,7 @@ function computeStreak(completedDates: (string | null)[]): number {
 
 export default function ProfileScreen() {
   const { profile, household, user, setProfile, setHousehold, signOut } = useAuthStore();
-  const { accent, loadAccent } = useNidoStore();
+  const { accent } = useNidoStore();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.full_name ?? '');
@@ -44,36 +43,9 @@ export default function ProfileScreen() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [stats, setStats] = useState({ tareas: '—', racha: '—', aportacion: '—' });
-  const [myNidos, setMyNidos] = useState<Household[]>([]);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [nidoSheet, setNidoSheet] = useState<null | 'manage' | 'add'>(null);
+  const [configOpen, setConfigOpen] = useState(false);
 
   useEffect(() => { setNameVal(profile?.full_name ?? ''); }, [profile]);
-
-  // Todos los nidos a los que pertenece el usuario (para poder cambiar entre ellos)
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('household_members')
-        .select('households(*)')
-        .eq('user_id', user.id);
-      if (cancelled || !data) return;
-      const list = data.map((r: any) => r.households).filter(Boolean) as Household[];
-      list.sort((a, b) => a.name.localeCompare(b.name));
-      setMyNidos(list);
-    })();
-    return () => { cancelled = true; };
-  }, [user?.id, household?.id]);
-
-  const switchNido = async (h: Household) => {
-    if (h.id === household?.id) return;
-    setSwitchingId(h.id);
-    setHousehold(h);
-    await loadAccent(h.id);
-    setSwitchingId(null);
-  };
 
   useEffect(() => {
     if (!user || !household) return;
@@ -201,24 +173,15 @@ export default function ProfileScreen() {
 
   const confirmResetAction = async () => {
     setConfirmReset(false);
-    // Quita al usuario del nido actual en la BD para que pueda crear/unirse a otro
+    // Quita al usuario del nido en la BD y vuelve al onboarding para crear/unirse a otro.
     if (user && household) {
       await supabase.from('household_members')
         .delete()
         .eq('household_id', household.id)
         .eq('user_id', user.id);
     }
-    // Si quedan otros nidos, cambia a uno de ellos; si no, vuelve al onboarding.
-    const remaining = myNidos.filter((h) => h.id !== household?.id);
-    if (remaining.length > 0) {
-      const next = remaining[0];
-      setHousehold(next);
-      await loadAccent(next.id);
-      setMyNidos(remaining);
-    } else {
-      setHousehold(null);
-      router.replace('/(auth)/onboarding');
-    }
+    setHousehold(null);
+    router.replace('/(auth)/onboarding');
   };
 
   // ── sign out ──────────────────────────────────────────────────────────────
@@ -304,48 +267,19 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {/* Mis nidos — lista + cambio */}
-        {myNidos.length > 0 && (
+        {/* Tu nido — nombre + código de invitación para compartir con tu pareja */}
+        {household && (
           <View style={[s.card, { borderColor: accent.hex + '30' }]}>
-            <Text style={s.cardLabel}>MIS NIDOS</Text>
-            {myNidos.map((h) => {
-              const active = h.id === household?.id;
-              const dot = nidoColorByKey((h as any).accent_color).hex;
-              return (
-                <TouchableOpacity
-                  key={h.id}
-                  style={[s.nidoRow, active && { borderColor: accent.hex, backgroundColor: accent.hex + '0D' }]}
-                  onPress={() => switchNido(h)}
-                  activeOpacity={0.7}
-                  disabled={active || !!switchingId}
-                >
-                  <View style={[s.colorDot, { backgroundColor: dot }]} />
-                  <Text style={[s.nidoRowName, active && { color: accent.hex, fontWeight: '600' }]} numberOfLines={1}>
-                    {h.name}
-                  </Text>
-                  {switchingId === h.id ? (
-                    <ActivityIndicator size="small" color={accent.hex} />
-                  ) : active ? (
-                    <Text style={[s.nidoRowTag, { color: accent.hex }]}>Activo</Text>
-                  ) : (
-                    <Text style={s.nidoRowSwitch}>Cambiar ›</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+            <Text style={s.cardLabel}>TU NIDO</Text>
+            <View style={s.nidoHeadRow}>
+              <View style={[s.colorDot, { backgroundColor: nidoColorByKey((household as any).accent_color).hex }]} />
+              <Text style={s.nidoHeadName} numberOfLines={1}>{household.name}</Text>
+            </View>
 
-            <TouchableOpacity style={s.addNidoBtn} onPress={() => setNidoSheet('add')} activeOpacity={0.7}>
-              <View style={[s.addNidoIcon, { backgroundColor: accent.hex + '15' }]}>
-                <Text style={[s.addNidoIconText, { color: accent.hex }]}>+</Text>
-              </View>
-              <Text style={s.addNidoText}>Añadir o unirme a otro nido</Text>
-            </TouchableOpacity>
-
-            {/* Código de invitación del nido activo */}
             {household?.invite_code && (
               <>
                 <View style={s.codeRow}>
-                  <Text style={s.codePre}>Código de {household.name}</Text>
+                  <Text style={s.codePre}>Código para invitar</Text>
                   <Text style={[s.code, { color: accent.hex }]}>{household.invite_code}</Text>
                 </View>
                 <View style={s.codeActions}>
@@ -373,7 +307,7 @@ export default function ProfileScreen() {
 
         {/* Settings rows */}
         <View style={s.settingsCard}>
-          <TouchableOpacity style={s.settingsRow} onPress={() => setNidoSheet('manage')} activeOpacity={0.7}>
+          <TouchableOpacity style={s.settingsRow} onPress={() => setConfigOpen(true)} activeOpacity={0.7}>
             <Text style={s.settingsIcon}>⚙️</Text>
             <Text style={s.settingsLabel}>Configurar nido</Text>
             <Text style={s.settingsCaret}>›</Text>
@@ -396,9 +330,7 @@ export default function ProfileScreen() {
           <View style={s.confirmBox}>
             <Text style={s.confirmTitle}>¿Salir de este nido?</Text>
             <Text style={s.confirmSub}>
-              {myNidos.filter((h) => h.id !== household?.id).length > 0
-                ? 'Dejarás de ser miembro de este nido y pasarás a otro de tus nidos.'
-                : 'Dejarás de ser miembro de este nido y volverás al inicio.'}
+              Dejarás de ser miembro de este nido y volverás al inicio para crear o unirte a otro.
             </Text>
             <View style={s.confirmRow}>
               <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmReset(false)}>
@@ -429,9 +361,8 @@ export default function ProfileScreen() {
       </ScrollView>
 
       <NidoSheet
-        visible={nidoSheet !== null}
-        initialMode={nidoSheet ?? 'manage'}
-        onClose={() => setNidoSheet(null)}
+        visible={configOpen}
+        onClose={() => setConfigOpen(false)}
       />
     </SafeAreaView>
   );
@@ -470,6 +401,8 @@ const s = StyleSheet.create({
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT },
   colorDot: { width: 16, height: 16, borderRadius: 8 },
+  nidoHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
+  nidoHeadName: { flex: 1, fontSize: 18, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3 },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
   codePre: { fontSize: 13, color: C.ink3, fontFamily: FONT },
   code: { fontFamily: 'monospace', fontWeight: '700', fontSize: 15, letterSpacing: 3 },

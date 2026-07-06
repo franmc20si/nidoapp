@@ -215,7 +215,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
             {/* Save */}
             {saveError ? <Text style={tb.errorText}>{saveError}</Text> : null}
             <PressScale style={[tb.save, { backgroundColor: accent.hex, shadowColor: accent.hex }]} onPress={handleAdd} disabled={saving}>
-              {saving ? <ActivityIndicator color={C.white} /> : <Text style={tb.saveText}>Añadir al nido</Text>}
+              {saving ? <ActivityIndicator color={C.white} /> : <Text style={tb.saveText}>Añadir tarea</Text>}
             </PressScale>
       </ScrollView>
     </BottomSheet>
@@ -226,14 +226,14 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
 // en el sidebar de escritorio lo dejamos arriba como inicio natural.
 const MOBILE_TABS = [
   { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },
-  { name: 'nido',    label: 'Nido',    Icon: IconNest },
+  { name: 'nido',    label: 'Tareas',  Icon: IconNest },
   { name: 'index',   label: 'Semana',  Icon: IconHome },
   { name: 'servicios', label: 'Servicios', Icon: IconChart },
   { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
 ];
 const DESKTOP_TABS = [
   { name: 'index',   label: 'Semana',  Icon: IconHome },
-  { name: 'nido',    label: 'Nido',    Icon: IconNest },
+  { name: 'nido',    label: 'Tareas',  Icon: IconNest },
   { name: 'calendario', label: 'Calendario', Icon: IconCalendarTab },
   { name: 'servicios', label: 'Servicios', Icon: IconChart },
   { name: 'menu',    label: 'Menú',    Icon: IconMenuTab },

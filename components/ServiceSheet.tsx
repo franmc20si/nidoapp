@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import BottomSheet from '@/components/BottomSheet';
 import BankSheet from '@/components/BankSheet';
+import HouseSheet from '@/components/HouseSheet';
 import PressScale from '@/components/PressScale';
 import { C, R, FONT } from '@/constants/theme';
 import { SERVICE_CATS, CYCLES } from '@/constants/services';
@@ -12,6 +13,7 @@ import { nidoColorByKey } from '@/constants/nidoColors';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useBanksStore } from '@/store/banksStore';
+import { useHousesStore } from '@/store/housesStore';
 import { supabase } from '@/lib/supabase';
 import { Subscription } from '@/types';
 import { withTimeout } from '@/lib/withTimeout';
@@ -50,6 +52,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
   const { accent } = useNidoStore();
   const { household, user } = useAuthStore();
   const { banks, loadBanks } = useBanksStore();
+  const { houses, loadHouses } = useHousesStore();
 
   const [name,     setName]     = useState('');
   const [category, setCategory] = useState<string | null>('luz');
@@ -57,7 +60,9 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
   const [cycle,    setCycle]    = useState('monthly');
   const [dateText, setDateText] = useState('');
   const [bankId,   setBankId]   = useState<string | null>(null);
+  const [houseId,  setHouseId]  = useState<string | null>(null);
   const [bankSheetOpen, setBankSheetOpen] = useState(false);
+  const [houseSheetOpen, setHouseSheetOpen] = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error,    setError]    = useState('');
@@ -66,7 +71,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
 
   useEffect(() => {
     if (!visible) return;
-    if (household) loadBanks(household.id);
+    if (household) { loadBanks(household.id); loadHouses(household.id); }
     if (service) {
       setName(service.name);
       setCategory(service.category ?? 'otros');
@@ -74,8 +79,9 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
       setCycle(service.cycle ?? 'monthly');
       setDateText(isoToDisplay(service.next_payment));
       setBankId(service.bank_id ?? null);
+      setHouseId(service.house_id ?? null);
     } else {
-      setName(''); setCategory('luz'); setAmount(''); setCycle('monthly'); setDateText(''); setBankId(null);
+      setName(''); setCategory('luz'); setAmount(''); setCycle('monthly'); setDateText(''); setBankId(null); setHouseId(null);
     }
     setError('');
   }, [service, visible]);
@@ -97,6 +103,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
       cycle,
       next_payment: iso,
       bank_id: bankId,
+      house_id: houseId,
     };
     try {
       if (service) {
@@ -274,6 +281,29 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               </PressScale>
             </ScrollView>
 
+            {/* Casa */}
+            <Text style={s.label}>Casa</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bankRow} keyboardShouldPersistTaps="handled">
+              {houses.map((h) => {
+                const on = houseId === h.id;
+                const col = nidoColorByKey(h.color);
+                return (
+                  <PressScale
+                    key={h.id}
+                    scaleTo={0.94}
+                    style={[s.bankChip, on && { borderColor: col.hex, backgroundColor: col.wash }]}
+                    onPress={() => setHouseId(on ? null : h.id)}
+                  >
+                    <View style={[s.bankChipDot, { backgroundColor: col.hex }]} />
+                    <Text style={[s.bankChipText, on && { color: col.hex }]}>{h.name}</Text>
+                  </PressScale>
+                );
+              })}
+              <PressScale scaleTo={0.94} style={s.bankAddChip} onPress={() => setHouseSheetOpen(true)}>
+                <Text style={s.bankAddText}>＋ Nueva casa</Text>
+              </PressScale>
+            </ScrollView>
+
             {error ? <Text style={s.error}>{error}</Text> : null}
 
             <PressScale
@@ -292,6 +322,13 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
       visible={bankSheetOpen}
       onClose={() => setBankSheetOpen(false)}
       onSaved={(b) => { setBankId(b.id); setBankSheetOpen(false); }}
+    />
+
+    <HouseSheet
+      house={null}
+      visible={houseSheetOpen}
+      onClose={() => setHouseSheetOpen(false)}
+      onSaved={(h) => { setHouseId(h.id); setHouseSheetOpen(false); }}
     />
     </>
   );
