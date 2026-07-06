@@ -18,6 +18,7 @@ import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import { getServiceCat } from '@/constants/services';
+import { nextPaymentDate, daysUntilNextPayment } from '@/lib/nextPayment';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function mixHex(a: string, b: string, t: number) {
@@ -38,12 +39,6 @@ function getGreeting(name: string) {
   if (h >= 6 && h < 14) return `Buenos días, ${name}`;
   if (h >= 14 && h < 21) return `Buenas tardes, ${name}`;
   return `Buenas noches, ${name}`;
-}
-
-function daysUntil(iso: string | null): number | null {
-  if (!iso) return null;
-  const diff = new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0);
-  return Math.ceil(diff / 86400000);
 }
 
 function daysLabel(days: number | null): string {
@@ -211,20 +206,26 @@ export default function HoyScreen() {
   };
 
   // ── Próximos pagos ────────────────────────────────────────────────────────
+  // Traemos todos los servicios con fecha y calculamos su PRÓXIMA ocurrencia en
+  // cliente (avanzando por el ciclo). Así los recurrentes ya pasados no
+  // desaparecen: se muestran con su siguiente vencimiento. Ordenamos por esa
+  // fecha efectiva y cogemos los 2 más próximos.
   const fetchUpcomingSubs = async () => {
     if (!household) return;
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
       const { data } = await withTimeout(
         supabase.from('subscriptions')
           .select('*')
           .eq('household_id', household.id)
           .not('next_payment', 'is', null)
-          .gte('next_payment', todayStr)
-          .order('next_payment', { ascending: true })
-          .limit(2)
       );
-      setUpcomingSubs((data ?? []) as Subscription[]);
+      const subs = ((data ?? []) as Subscription[])
+        .map(s => ({ s, next: nextPaymentDate(s.next_payment, s.cycle) }))
+        .filter(x => x.next !== null)
+        .sort((a, b) => a.next!.getTime() - b.next!.getTime())
+        .slice(0, 2)
+        .map(x => x.s);
+      setUpcomingSubs(subs);
     } catch {
       setUpcomingSubs([]);
     }
@@ -497,7 +498,7 @@ export default function HoyScreen() {
             ) : (
               upcomingSubs.map(sub => {
                 const cat  = getServiceCat(sub.category);
-                const days = daysUntil(sub.next_payment);
+                const days = daysUntilNextPayment(sub.next_payment, sub.cycle);
                 const col  = urgencyColor(days);
                 return (
                   <View key={sub.id} style={n.subRow}>

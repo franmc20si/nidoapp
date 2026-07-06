@@ -13,13 +13,14 @@ import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from
 import { nidoColorByKey } from '@/constants/nidoColors';
 import ServiceSheet from '@/components/ServiceSheet';
 import { readWithRetry } from '@/lib/withTimeout';
+import { daysUntilNextPayment } from '@/lib/nextPayment';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 
-// Días hasta la próxima fecha de pago
-function daysUntil(iso: string | null): number | null {
-  if (!iso) return null;
-  const diff = new Date(iso).setHours(0,0,0,0) - new Date().setHours(0,0,0,0);
-  return Math.ceil(diff / 86400000);
+// Días hasta el PRÓXIMO pago: avanza la fecha ancla por el ciclo, así los
+// servicios recurrentes ya pasados muestran su siguiente vencimiento en vez
+// de quedarse en "Vencido".
+function daysUntil(sub: { next_payment: string | null; cycle: string }): number | null {
+  return daysUntilNextPayment(sub.next_payment, sub.cycle);
 }
 
 function urgencyColor(days: number | null): string | null {
@@ -90,7 +91,9 @@ export default function ServiciosScreen() {
     : subs.filter(s => (s.house_id ?? null) === (houseFilter === 'none' ? null : houseFilter));
 
   const totalMonthly = visibleSubs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
-  const upcoming = visibleSubs.filter(s => { const d = daysUntil(s.next_payment); return d !== null && d <= 7; });
+  const upcoming = visibleSubs
+    .filter(s => { const d = daysUntil(s); return d !== null && d <= 7; })
+    .sort((a, b) => (daysUntil(a) ?? 0) - (daysUntil(b) ?? 0));
 
   // Nº de servicios sin casa (para el chip "Sin casa")
   const noHouseCount = subs.filter(s => !s.house_id).length;
@@ -209,7 +212,7 @@ export default function ServiciosScreen() {
           <View style={s.upcomingCard}>
             <Text style={s.upcomingTitle}>⏰ Próximos pagos</Text>
             {upcoming.map(sub => {
-              const days = daysUntil(sub.next_payment);
+              const days = daysUntil(sub);
               const cat  = getServiceCat(sub.category);
               const col  = urgencyColor(days) ?? C.cena;
               return (
@@ -253,7 +256,7 @@ export default function ServiciosScreen() {
                   <Text style={s.catTotal}>{catTotal.toFixed(2).replace('.', ',')} €/mes</Text>
                 </View>
                 {items.map((sub, idx) => {
-                  const days  = daysUntil(sub.next_payment);
+                  const days  = daysUntil(sub);
                   const uCol  = urgencyColor(days);
                   const cycle = getCycle(sub.cycle);
                   const bank  = sub.bank_id ? banks.find(b => b.id === sub.bank_id) : null;
