@@ -31,9 +31,9 @@ function urgencyColor(days: number | null): string | null {
   return null;
 }
 
-function daysLabel(days: number | null): string {
+function daysLabel(days: number | null, once = false): string {
   if (days === null) return '';
-  if (days < 0)  return 'Vencido';
+  if (days < 0)  return once ? 'Pagado' : 'Vencido';
   if (days === 0) return 'Hoy';
   if (days === 1) return 'Mañana';
   return `En ${days} días`;
@@ -92,7 +92,7 @@ export default function ServiciosScreen() {
 
   const totalMonthly = visibleSubs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
   const upcoming = visibleSubs
-    .filter(s => { const d = daysUntil(s); return d !== null && d <= 7; })
+    .filter(s => { const d = daysUntil(s); return d !== null && d >= 0 && d <= 7; })
     .sort((a, b) => (daysUntil(a) ?? 0) - (daysUntil(b) ?? 0));
 
   // Nº de servicios sin casa (para el chip "Sin casa")
@@ -194,7 +194,7 @@ export default function ServiciosScreen() {
         <View style={s.summaryCard}>
           <View style={s.summaryLeft}>
             <Text style={s.summaryLabel}>
-              {houseFilter === 'all' ? 'Total mensual estimado' : 'Total de esta selección'}
+              {houseFilter === 'all' ? 'Media mensual' : 'Media de esta selección'}
             </Text>
             <Text style={[s.summaryAmount, { color: accent.hex }]}>
               {totalMonthly.toFixed(2).replace('.', ',')} €
@@ -202,7 +202,7 @@ export default function ServiciosScreen() {
             <Text style={s.summaryCount}>{visibleSubs.length} {visibleSubs.length === 1 ? 'servicio' : 'servicios'} activos</Text>
           </View>
           <View style={s.summaryRight}>
-            <Text style={s.summaryRightLabel}>Anual estimado</Text>
+            <Text style={s.summaryRightLabel}>Total anual</Text>
             <Text style={s.summaryRightAmount}>{(totalMonthly * 12).toFixed(0)} €</Text>
           </View>
         </View>
@@ -257,7 +257,8 @@ export default function ServiciosScreen() {
                 </View>
                 {items.map((sub, idx) => {
                   const days  = daysUntil(sub);
-                  const uCol  = urgencyColor(days);
+                  const once  = sub.cycle === 'once';
+                  const uCol  = once && days !== null && days < 0 ? null : urgencyColor(days);
                   const cycle = getCycle(sub.cycle);
                   const bank  = sub.bank_id ? banks.find(b => b.id === sub.bank_id) : null;
                   const house = sub.house_id ? houses.find(h => h.id === sub.house_id) : null;
@@ -285,7 +286,7 @@ export default function ServiciosScreen() {
                           ) : null}
                           {sub.next_payment && (
                             <Text style={[s.subDays, uCol ? { color: uCol } : {}]}>
-                              {uCol ? '● ' : ''}{daysLabel(days)}
+                              {uCol ? '● ' : ''}{daysLabel(days, once)}
                             </Text>
                           )}
                         </View>

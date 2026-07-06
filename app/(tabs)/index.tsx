@@ -219,9 +219,10 @@ export default function HoyScreen() {
           .eq('household_id', household.id)
           .not('next_payment', 'is', null)
       );
+      const today = new Date(); today.setHours(0, 0, 0, 0);
       const subs = ((data ?? []) as Subscription[])
         .map(s => ({ s, next: nextPaymentDate(s.next_payment, s.cycle) }))
-        .filter(x => x.next !== null)
+        .filter(x => x.next !== null && x.next.getTime() >= today.getTime())
         .sort((a, b) => a.next!.getTime() - b.next!.getTime())
         .slice(0, 2)
         .map(x => x.s);

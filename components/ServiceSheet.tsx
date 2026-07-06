@@ -246,8 +246,8 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               })}
             </ScrollView>
 
-            {/* Próximo pago */}
-            <Text style={s.label}>Próximo pago</Text>
+            {/* Fecha: inicio (recurrente) o fecha del pago (único) */}
+            <Text style={s.label}>{cycle === 'once' ? 'Fecha del pago' : 'Fecha de inicio'}</Text>
             <TextInput
               style={s.field}
               value={dateText}

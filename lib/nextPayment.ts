@@ -28,6 +28,9 @@ export function nextPaymentDate(iso: string | null, cycleKey: string | null | un
   const anchor = midnight(new Date(iso + 'T00:00:00'));
   if (isNaN(anchor.getTime())) return null;
 
+  // Pago único: no recurre → su fecha es la que es (puede quedar en el pasado).
+  if (cycleKey === 'once') return anchor;
+
   const today = midnight(new Date());
   if (anchor >= today) return anchor;
 
