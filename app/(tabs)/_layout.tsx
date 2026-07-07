@@ -323,27 +323,25 @@ export default function TabsLayout() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= DESKTOP_BP;
   const tabBarPosition = isDesktop ? 'left' : 'bottom';
-  // En escritorio centramos el contenido con ancho máximo para que no se
-  // estire de borde a borde. IMPORTANTE: todas las escenas deben ir centradas
-  // (incluida calendario). Las escenas inactivas del tab navigator no se ocultan
-  // en web (quedan apiladas detrás); si una va a ancho completo, asoma por los
-  // gutters transparentes que deja la escena activa centrada. Manteniéndolas
-  // todas al mismo ancho, la activa (opaca) tapa a la inactiva → sin "fondo".
-  const centeredScene = isDesktop
-    ? { maxWidth: 900, width: '100%' as const, alignSelf: 'center' as const }
-    : undefined;
+  // En escritorio la app usa el ancho completo. IMPORTANTE: las escenas
+  // inactivas del tab navigator NO se ocultan en web (quedan apiladas detrás,
+  // visibles). Para que ninguna asome de fondo al cambiar de tab, cada escena
+  // debe ser opaca y ocupar todo el ancho: así la escena activa tapa por
+  // completo a las de detrás. `sceneStyle` en screenOptions se aplica a TODAS
+  // (incluidas las href:null como el perfil).
+  const sceneStyle = { flex: 1, backgroundColor: C.paper };
   return (
     <>
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false, tabBarPosition }}
+        screenOptions={{ headerShown: false, tabBarPosition, sceneStyle }}
       >
-        <Tabs.Screen name="index" options={{ sceneStyle: centeredScene }} />
-        <Tabs.Screen name="nido" options={{ sceneStyle: centeredScene }} />
-        <Tabs.Screen name="servicios" options={{ sceneStyle: centeredScene }} />
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="nido" />
+        <Tabs.Screen name="servicios" />
         <Tabs.Screen name="reparto" options={{ href: null }} />
-        <Tabs.Screen name="menu" options={{ sceneStyle: centeredScene }} />
-        <Tabs.Screen name="calendario" options={{ sceneStyle: centeredScene }} />
+        <Tabs.Screen name="menu" />
+        <Tabs.Screen name="calendario" />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>
       <ToastBar />

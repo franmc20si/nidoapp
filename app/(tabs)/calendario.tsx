@@ -272,11 +272,13 @@ export default function CalendarioScreen() {
   // ── Layout responsive ──────────────────────────────────────────────────────
   // En escritorio los meses van en rejilla centrada con ancho máximo; en móvil,
   // una sola columna apilada como siempre.
-  // La escena va centrada con maxWidth 900 en escritorio (ver _layout.tsx), así
-  // que el layout debe calcularse sobre ese ancho, no el de la ventana completa,
-  // o el contenido se desbordaría del contenedor centrado.
+  // La escena usa el ancho completo (ver _layout.tsx). En escritorio hay un
+  // sidebar fijo de 232px a la izquierda, así que el ancho REAL disponible es el
+  // de la ventana menos ese sidebar; si no lo descontáramos, calcularíamos las
+  // columnas para un ancho mayor del real y sobrarían/encogerían. (DESKTOP_BP y
+  // ancho de sidebar coinciden con app/(tabs)/_layout.tsx.)
   const { width: rawW } = useWindowDimensions();
-  const winW = Math.min(rawW, 900);
+  const winW = rawW >= 900 ? rawW - 232 : rawW;
   const H_PAD = 20;
   const cols = winW >= 1180 ? 3 : winW >= 760 ? 2 : 1;
   const gap = cols === 1 ? 12 : 18;
