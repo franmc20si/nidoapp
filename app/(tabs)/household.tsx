@@ -31,7 +31,7 @@ function computeStreak(completedDates: (string | null)[]): number {
 
 export default function ProfileScreen() {
   const { profile, household, user, setProfile, setHousehold, signOut } = useAuthStore();
-  const { accent } = useNidoStore();
+  const { accent, loadAccent } = useNidoStore();
 
   const [editingName, setEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(profile?.full_name ?? '');
@@ -173,15 +173,28 @@ export default function ProfileScreen() {
 
   const confirmResetAction = async () => {
     setConfirmReset(false);
-    // Quita al usuario del nido en la BD y vuelve al onboarding para crear/unirse a otro.
-    if (user && household) {
+    if (!user) return;
+    // Quita al usuario del nido actual en la BD.
+    if (household) {
       await supabase.from('household_members')
         .delete()
         .eq('household_id', household.id)
         .eq('user_id', user.id);
     }
-    setHousehold(null);
-    router.replace('/(auth)/onboarding');
+    // Si le queda otro nido (p. ej. de pruebas), entra directamente en él;
+    // si no queda ninguno, vuelve al onboarding para crear/unirse.
+    const { data } = await supabase
+      .from('household_members')
+      .select('households(*)')
+      .eq('user_id', user.id);
+    const remaining = (data ?? []).map((r: any) => r.households).filter(Boolean);
+    if (remaining.length > 0) {
+      setHousehold(remaining[0]);
+      await loadAccent(remaining[0].id);
+    } else {
+      setHousehold(null);
+      router.replace('/(auth)/onboarding');
+    }
   };
 
   // ── sign out ──────────────────────────────────────────────────────────────
@@ -330,7 +343,7 @@ export default function ProfileScreen() {
           <View style={s.confirmBox}>
             <Text style={s.confirmTitle}>¿Salir de este nido?</Text>
             <Text style={s.confirmSub}>
-              Dejarás de ser miembro de este nido y volverás al inicio para crear o unirte a otro.
+              Dejarás de ser miembro de este nido. Si tienes otro, entrarás en él; si no, volverás al inicio.
             </Text>
             <View style={s.confirmRow}>
               <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmReset(false)}>
