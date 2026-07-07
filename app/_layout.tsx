@@ -21,19 +21,27 @@ export default function RootLayout() {
     const fontPromise = Font.loadAsync({ Nohemi: require('../assets/Nohemi-Regular.ttf') });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
+        // IMPORTANTE: no hacer `await` de consultas a Supabase DENTRO de este
+        // callback. onAuthStateChange retiene el lock interno de GoTrue mientras
+        // se ejecuta; si aquí esperamos queries (que a su vez necesitan la sesión)
+        // se serializan tras ese lock y, al recargar (INITIAL_SESSION), las cargas
+        // de las tabs se cuelgan → TIMEOUT. Diferir con setTimeout(0) hace que el
+        // callback retorne ya y libere el lock antes de tocar la BD.
         if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-          const profile = await ensureProfile(session.user);
-          if (profile) setProfile(profile);
-          const { route, household } = await resolveDestination(session.user.id);
-          if (household) setHousehold(household);
-          await fontPromise;
-          router.replace(route);
-          // Si vamos a las tabs, mantenemos el splash hasta que la pantalla
-          // inicial cargue sus datos (efecto homeReady abajo). En cualquier otra
-          // ruta (p. ej. onboarding) lo ocultamos ya, no hay datos pesados.
-          if (route !== '/(tabs)') SplashScreen.hideAsync().catch(() => {});
+          setTimeout(async () => {
+            const profile = await ensureProfile(session.user);
+            if (profile) setProfile(profile);
+            const { route, household } = await resolveDestination(session.user.id);
+            if (household) setHousehold(household);
+            await fontPromise;
+            router.replace(route);
+            // Si vamos a las tabs, mantenemos el splash hasta que la pantalla
+            // inicial cargue sus datos (efecto homeReady abajo). En cualquier otra
+            // ruta (p. ej. onboarding) lo ocultamos ya, no hay datos pesados.
+            if (route !== '/(tabs)') SplashScreen.hideAsync().catch(() => {});
+          }, 0);
         } else if (!session) {
           // Don't navigate if the callback page is handling OAuth tokens
           if (typeof window !== 'undefined') {
@@ -41,9 +49,11 @@ export default function RootLayout() {
             const path = window.location.pathname;
             if (hash.includes('access_token') || path === '/auth-callback') return;
           }
-          await fontPromise;
-          SplashScreen.hideAsync().catch(() => {});
-          router.replace('/(auth)/login');
+          setTimeout(async () => {
+            await fontPromise;
+            SplashScreen.hideAsync().catch(() => {});
+            router.replace('/(auth)/login');
+          }, 0);
         }
       }
     );

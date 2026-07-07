@@ -324,9 +324,11 @@ export default function TabsLayout() {
   const isDesktop = width >= DESKTOP_BP;
   const tabBarPosition = isDesktop ? 'left' : 'bottom';
   // En escritorio centramos el contenido con ancho máximo para que no se
-  // estire de borde a borde. Solo en las pantallas que no auto-gestionan su
-  // anchura: calendario calcula sus columnas con el ancho de ventana completo,
-  // así que se deja a ancho completo.
+  // estire de borde a borde. IMPORTANTE: todas las escenas deben ir centradas
+  // (incluida calendario). Las escenas inactivas del tab navigator no se ocultan
+  // en web (quedan apiladas detrás); si una va a ancho completo, asoma por los
+  // gutters transparentes que deja la escena activa centrada. Manteniéndolas
+  // todas al mismo ancho, la activa (opaca) tapa a la inactiva → sin "fondo".
   const centeredScene = isDesktop
     ? { maxWidth: 900, width: '100%' as const, alignSelf: 'center' as const }
     : undefined;
@@ -341,7 +343,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="servicios" options={{ sceneStyle: centeredScene }} />
         <Tabs.Screen name="reparto" options={{ href: null }} />
         <Tabs.Screen name="menu" options={{ sceneStyle: centeredScene }} />
-        <Tabs.Screen name="calendario" />
+        <Tabs.Screen name="calendario" options={{ sceneStyle: centeredScene }} />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>
       <ToastBar />

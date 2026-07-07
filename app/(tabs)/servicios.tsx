@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
@@ -76,6 +76,14 @@ export default function ServiciosScreen() {
       setLoading(false);
     }
   };
+
+  // Carga inicial + al cambiar de hogar. Imprescindible además del focus effect:
+  // en web, con la tab bar personalizada, useFocusEffect no se dispara al navegar
+  // entre tabs, así que sin este useEffect la pantalla se queda cargando para siempre.
+  useEffect(() => {
+    fetchSubs();
+    if (household) { loadBanks(household.id); loadHouses(household.id); }
+  }, [household?.id]);
 
   useFocusEffect(useCallback(() => {
     fetchSubs();

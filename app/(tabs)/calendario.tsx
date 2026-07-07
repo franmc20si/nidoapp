@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
@@ -263,12 +263,20 @@ export default function CalendarioScreen() {
     await loadPeriods(household.id);
   }, [household?.id]);
 
+  // Carga inicial + al cambiar de hogar (imprescindible en web: useFocusEffect
+  // no se dispara al navegar entre tabs con la tab bar personalizada).
+  useEffect(() => { fetchPeriods(); }, [fetchPeriods]);
+
   useFocusEffect(useCallback(() => { fetchPeriods(); }, [fetchPeriods]));
 
   // ── Layout responsive ──────────────────────────────────────────────────────
   // En escritorio los meses van en rejilla centrada con ancho máximo; en móvil,
   // una sola columna apilada como siempre.
-  const { width: winW } = useWindowDimensions();
+  // La escena va centrada con maxWidth 900 en escritorio (ver _layout.tsx), así
+  // que el layout debe calcularse sobre ese ancho, no el de la ventana completa,
+  // o el contenido se desbordaría del contenedor centrado.
+  const { width: rawW } = useWindowDimensions();
+  const winW = Math.min(rawW, 900);
   const H_PAD = 20;
   const cols = winW >= 1180 ? 3 : winW >= 760 ? 2 : 1;
   const gap = cols === 1 ? 12 : 18;
