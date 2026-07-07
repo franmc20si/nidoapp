@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,6 +15,10 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const { setSession, setProfile, setHousehold, session, isLoading } = useAuthStore();
   const homeReady = useAuthStore((s) => s.homeReady);
+  // Usuario para el que ya resolvimos perfil/hogar y navegamos. Evita renavegar
+  // (y resetear a la tab inicial) cuando supabase re-emite SIGNED_IN al volver el
+  // foco a la pestaña del navegador.
+  const authHandledForUser = useRef<string | null>(null);
 
   useEffect(() => {
     // Start font loading in background — don't block auth listener
@@ -30,6 +34,10 @@ export default function RootLayout() {
         // de las tabs se cuelgan → TIMEOUT. Diferir con setTimeout(0) hace que el
         // callback retorne ya y libere el lock antes de tocar la BD.
         if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          // Ya resuelto para este usuario (p. ej. SIGNED_IN re-emitido al volver
+          // el foco a la pestaña): no renavegar, o perderíamos la tab actual.
+          if (authHandledForUser.current === session.user.id) return;
+          authHandledForUser.current = session.user.id;
           setTimeout(async () => {
             const profile = await ensureProfile(session.user);
             if (profile) setProfile(profile);
@@ -43,6 +51,7 @@ export default function RootLayout() {
             if (route !== '/(tabs)') SplashScreen.hideAsync().catch(() => {});
           }, 0);
         } else if (!session) {
+          authHandledForUser.current = null;
           // Don't navigate if the callback page is handling OAuth tokens
           if (typeof window !== 'undefined') {
             const hash = window.location.hash;
