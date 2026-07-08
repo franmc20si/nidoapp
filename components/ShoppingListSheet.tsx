@@ -484,8 +484,8 @@ const sl = StyleSheet.create({
   closeBtnText:{ fontSize: 13, color: C.ink2 },
 
   scroll:       { maxHeight: undefined },
-  progressBar:  { height: 4, backgroundColor: C.line, marginHorizontal: 22, borderRadius: 999, overflow: 'hidden', marginBottom: 4 },
-  progressFill: { height: '100%', borderRadius: 999 },
+  progressBar:  { height: 4, backgroundColor: C.line, marginHorizontal: 22, borderRadius: R.pill, overflow: 'hidden', marginBottom: 4 },
+  progressFill: { height: '100%', borderRadius: R.pill },
 
   body: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40 },
 

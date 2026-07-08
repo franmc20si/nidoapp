@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Text, StyleSheet, Platform } from 'react-native';
 import { useToastStore } from '@/store/toastStore';
-import { FONT } from '@/constants/theme';
+import { C, FONT } from '@/constants/theme';
 
 const BG: Record<string, string> = {
-  error:   '#C2502F',
-  success: '#3A8B5C',
-  info:    '#44546A',
+  error:   C.brand,
+  success: C.success,
+  info:    C.info,
 };
 
 export function ToastBar() {
@@ -69,7 +69,7 @@ const s = StyleSheet.create({
     zIndex: 999,
   },
   text: {
-    color: '#fff',
+    color: C.white,
     fontSize: 14,
     fontFamily: FONT,
     fontWeight: '500',

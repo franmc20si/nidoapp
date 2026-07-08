@@ -130,7 +130,7 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
               <Text style={s.sheetTitle}>Editar tarea</Text>
               <PressScale onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
                 {deleting
-                  ? <ActivityIndicator size="small" color="#c0392b" />
+                  ? <ActivityIndicator size="small" color={C.danger} />
                   : <Text style={s.deleteBtnText}>Eliminar</Text>}
               </PressScale>
             </View>
@@ -239,8 +239,8 @@ const s = StyleSheet.create({
 
   headerRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   sheetTitle:    { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4 },
-  deleteBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: '#c0392b' },
-  deleteBtnText: { color: '#c0392b', fontWeight: '600', fontSize: 13, fontFamily: FONT },
+  deleteBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.danger },
+  deleteBtnText: { color: C.danger, fontWeight: '600', fontSize: 13, fontFamily: FONT },
 
   seg:        { flexDirection: 'row', backgroundColor: C.paperDeep, borderRadius: R.pill, padding: 4, marginBottom: 20 },
   segItem:    { flex: 1, paddingVertical: 11, borderRadius: R.pill, alignItems: 'center' },
@@ -272,7 +272,7 @@ const s = StyleSheet.create({
   ptsBig:     { fontSize: 22, fontWeight: '600', fontFamily: FONT, letterSpacing: -0.4 },
   ptsRule:    { fontSize: 12, color: C.ink3, fontFamily: FONT },
 
-  error:      { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
+  error:      { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
   save:       { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },
   saveDim:    { opacity: 0.4 },
   saveText:   { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },

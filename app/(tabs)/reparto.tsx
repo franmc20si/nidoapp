@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { C, R, FONT } from '@/constants/theme';
+import { C, R, FONT, MEMBER_COLORS } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { AchFlame, AchNest, AchStar, AchTrophy, AchGem } from '@/components/icons';
-
-const MEMBER_COLORS = [C.brand, C.suelo, '#7FA86A', '#A881F2', '#D97B66'];
 
 function getStartDate(period: 'semana' | 'mes' | 'ano'): string {
   const d = new Date();

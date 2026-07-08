@@ -349,5 +349,5 @@ const s = StyleSheet.create({
 
   btnPrimary:     { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },
   btnPrimaryText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
-  errorText:      { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
+  errorText:      { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
 });

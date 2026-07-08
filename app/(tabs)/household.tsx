@@ -440,17 +440,17 @@ const s = StyleSheet.create({
   settingsCaret: { fontSize: 20, color: C.ink3 },
   divider: { height: 1, backgroundColor: C.line },
 
-  signOut: { marginHorizontal: 20, backgroundColor: '#FEE8E1', borderRadius: R.l, padding: 16, alignItems: 'center' },
-  signOutText: { color: '#C2502F', fontWeight: '600', fontFamily: FONT, fontSize: 15 },
+  signOut: { marginHorizontal: 20, backgroundColor: C.brandWashSoft, borderRadius: R.l, padding: 16, alignItems: 'center' },
+  signOutText: { color: C.brand, fontWeight: '600', fontFamily: FONT, fontSize: 15 },
 
-  inlineError: { fontSize: 13, color: '#C2502F', fontFamily: FONT, marginTop: 4, textAlign: 'center' },
+  inlineError: { fontSize: 13, color: C.brand, fontFamily: FONT, marginTop: 4, textAlign: 'center' },
 
-  confirmBox: { marginHorizontal: 20, marginTop: 12, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1.5, borderColor: '#C2502F' + '40', padding: 18 },
+  confirmBox: { marginHorizontal: 20, marginTop: 12, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1.5, borderColor: C.brand + '40', padding: 18 },
   confirmTitle: { fontSize: 16, fontWeight: '600', color: C.ink, fontFamily: FONT },
   confirmSub: { fontSize: 13, color: C.ink2, fontFamily: FONT, marginTop: 4, marginBottom: 14 },
   confirmRow: { flexDirection: 'row', gap: 10 },
   confirmCancel: { flex: 1, borderRadius: R.l, borderWidth: 1, borderColor: C.line, padding: 11, alignItems: 'center' },
   confirmCancelText: { fontSize: 14, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-  confirmDanger: { flex: 1, borderRadius: R.l, backgroundColor: '#C2502F', padding: 11, alignItems: 'center' },
+  confirmDanger: { flex: 1, borderRadius: R.l, backgroundColor: C.brand, padding: 11, alignItems: 'center' },
   confirmDangerText: { fontSize: 14, fontWeight: '600', color: C.white, fontFamily: FONT },
 });

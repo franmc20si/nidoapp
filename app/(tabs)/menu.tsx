@@ -208,7 +208,7 @@ export default function MenuScreen() {
                   activeOpacity={0.75}
                 >
                   {comidaRecipe
-                    ? <Text style={[s.dishName, { color: mixHex(comidaRecipe.color, '#241E18', 0.55) }]}>{comidaRecipe.name}</Text>
+                    ? <Text style={[s.dishName, { color: mixHex(comidaRecipe.color, C.ink, 0.55) }]}>{comidaRecipe.name}</Text>
                     : comidaEvent
                       ? <Text style={s.eventCellName}>{comidaEvent}</Text>
                       : <Text style={s.cellPlus}>+</Text>}
@@ -228,7 +228,7 @@ export default function MenuScreen() {
                   activeOpacity={0.75}
                 >
                   {cenaRecipe
-                    ? <Text style={[s.dishName, { color: mixHex(cenaRecipe.color, '#241E18', 0.55) }]}>{cenaRecipe.name}</Text>
+                    ? <Text style={[s.dishName, { color: mixHex(cenaRecipe.color, C.ink, 0.55) }]}>{cenaRecipe.name}</Text>
                     : cenaEvent
                       ? <Text style={s.eventCellName}>{cenaEvent}</Text>
                       : <Text style={s.cellPlus}>+</Text>}
@@ -515,7 +515,7 @@ function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
           </View>
 
           <View style={[sh.preview, { backgroundColor: previewBg, borderColor: previewBorder }]}>
-            <Text style={[sh.previewName, { color: mixHex(color, '#241E18', 0.55) }]}>
+            <Text style={[sh.previewName, { color: mixHex(color, C.ink, 0.55) }]}>
               {name.trim() || 'Vista previa del plato'}
             </Text>
             <MealTags meals={meals} />

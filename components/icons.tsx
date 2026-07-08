@@ -4,6 +4,7 @@
  * ViewBox: 24×24 unless noted
  */
 import Svg, { Path, Circle, Ellipse, Line, Rect, Polyline, G } from 'react-native-svg';
+import { C } from '@/constants/theme';
 
 interface IconProps {
   size?: number;
@@ -15,7 +16,7 @@ interface IconProps {
 const D = { w: 2.6 }; // default strokeWidth
 
 // ── Home / Hoy ────────────────────────────────────────────────────────────────
-export function IconHome({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconHome({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M3 10.5 L12 3 L21 10.5 V20 Q21 21 20 21 H15 V15 Q15 14 14 14 H10 Q9 14 9 15 V21 H4 Q3 21 3 20 Z"
@@ -25,7 +26,7 @@ export function IconHome({ size = 24, color = '#211C17', fill = 'transparent', s
 }
 
 // ── Nest / Nido ───────────────────────────────────────────────────────────────
-export function IconNest({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconNest({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* nest bowl */}
@@ -43,7 +44,7 @@ export function IconNest({ size = 24, color = '#211C17', fill = 'transparent', s
 }
 
 // ── Chart / Reparto ───────────────────────────────────────────────────────────
-export function IconChart({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconChart({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="12" width="4.5" height="9" rx="1" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
@@ -54,7 +55,7 @@ export function IconChart({ size = 24, color = '#211C17', fill = 'transparent', 
 }
 
 // ── Fork & Knife / Menú ───────────────────────────────────────────────────────
-export function IconMenu({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconMenu({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* fork */}
@@ -67,7 +68,7 @@ export function IconMenu({ size = 24, color = '#211C17', fill = 'transparent', s
 }
 
 // ── Calendar / Calendario ───────────────────────────────────────────────────
-export function IconCalendar({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconCalendar({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="5" width="18" height="16" rx="2" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
@@ -79,7 +80,7 @@ export function IconCalendar({ size = 24, color = '#211C17', fill = 'transparent
 }
 
 // ── Bell / Campana ────────────────────────────────────────────────────────────
-export function IconBell({ size = 24, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconBell({ size = 24, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M5 17 Q5 16 7 16 L7 10 Q7 4 12 4 Q17 4 17 10 L17 16 Q19 16 19 17 Z"
@@ -90,7 +91,7 @@ export function IconBell({ size = 24, color = '#211C17', fill = 'transparent', s
 }
 
 // ── Plus / FAB ────────────────────────────────────────────────────────────────
-export function IconPlus({ size = 24, color = '#FFFFFF', strokeWidth = D.w }: IconProps) {
+export function IconPlus({ size = 24, color = C.white, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Line x1="12" y1="4" x2="12" y2="20" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
@@ -100,7 +101,7 @@ export function IconPlus({ size = 24, color = '#FFFFFF', strokeWidth = D.w }: Ic
 }
 
 // ── Check ─────────────────────────────────────────────────────────────────────
-export function IconCheck({ size = 16, color = '#FFFFFF', strokeWidth = 2.5 }: IconProps) {
+export function IconCheck({ size = 16, color = C.white, strokeWidth = 2.5 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 12 L10 18 L20 6" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
@@ -109,7 +110,7 @@ export function IconCheck({ size = 16, color = '#FFFFFF', strokeWidth = 2.5 }: I
 }
 
 // ── Close / X ─────────────────────────────────────────────────────────────────
-export function IconX({ size = 18, color = '#5A4F44', strokeWidth = 2.5 }: IconProps) {
+export function IconX({ size = 18, color = C.ink2, strokeWidth = 2.5 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Line x1="5" y1="5" x2="19" y2="19" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
@@ -119,7 +120,7 @@ export function IconX({ size = 18, color = '#5A4F44', strokeWidth = 2.5 }: IconP
 }
 
 // ── Settings / Gear ───────────────────────────────────────────────────────────
-export function IconSettings({ size = 20, color = '#5A4F44', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconSettings({ size = 20, color = C.ink2, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth={strokeWidth} fill={fill} />
@@ -130,7 +131,7 @@ export function IconSettings({ size = 20, color = '#5A4F44', fill = 'transparent
 }
 
 // ── Camera ────────────────────────────────────────────────────────────────────
-export function IconCamera({ size = 20, color = '#FFFFFF', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function IconCamera({ size = 20, color = C.white, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M2 8 Q2 7 3 7 L7 7 L9 4 L15 4 L17 7 L21 7 Q22 7 22 8 L22 19 Q22 20 21 20 L3 20 Q2 20 2 19 Z"
@@ -141,7 +142,7 @@ export function IconCamera({ size = 20, color = '#FFFFFF', fill = 'transparent',
 }
 
 // ── Arrow right ───────────────────────────────────────────────────────────────
-export function IconChevronRight({ size = 20, color = '#978876', strokeWidth = D.w }: IconProps) {
+export function IconChevronRight({ size = 20, color = C.ink3, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M9 5 L16 12 L9 19" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
@@ -150,7 +151,7 @@ export function IconChevronRight({ size = 20, color = '#978876', strokeWidth = D
 }
 
 // ── Share ────────────────────────────────────────────────────────────────────
-export function IconShare({ size = 20, color = '#5A4F44', strokeWidth = D.w }: IconProps) {
+export function IconShare({ size = 20, color = C.ink2, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 12 L4 19 Q4 20 5 20 L19 20 Q20 20 20 19 L20 12" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
@@ -163,7 +164,7 @@ export function IconShare({ size = 20, color = '#5A4F44', strokeWidth = D.w }: I
 // Each takes color (stroke) and fill (lighter area)
 
 // Cocina — frying pan
-export function CatCocina({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatCocina({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Ellipse cx="15" cy="14" rx="7" ry="5.5" fill={fill} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
@@ -177,7 +178,7 @@ export function CatCocina({ size = 22, color = '#211C17', fill = 'transparent', 
 }
 
 // Baño — shower head
-export function CatBano({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatBano({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M5 4 Q5 3 6 3 L11 3 Q12 3 12 5 L12 9" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -193,7 +194,7 @@ export function CatBano({ size = 22, color = '#211C17', fill = 'transparent', st
 }
 
 // Suelo — broom
-export function CatSuelo({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatSuelo({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Line x1="7" y1="3" x2="18" y2="14" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" />
@@ -204,7 +205,7 @@ export function CatSuelo({ size = 22, color = '#211C17', fill = 'transparent', s
 }
 
 // Colada — t-shirt
-export function CatColada({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatColada({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M2 6 L7 4 Q8 7 12 7 Q16 7 17 4 L22 6 L20 11 L17 10 L17 20 Q17 21 16 21 L8 21 Q7 21 7 20 L7 10 L4 11 Z"
@@ -214,7 +215,7 @@ export function CatColada({ size = 22, color = '#211C17', fill = 'transparent', 
 }
 
 // Compra — shopping bag
-export function CatCompra({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatCompra({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 9 L5 20 Q5 21 6 21 L18 21 Q19 21 19 20 L20 9 Z"
@@ -226,7 +227,7 @@ export function CatCompra({ size = 22, color = '#211C17', fill = 'transparent', 
 }
 
 // Cristales — window with shine
-export function CatCristales({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatCristales({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Rect x="3" y="3" width="18" height="18" rx="2" fill={fill} stroke={color} strokeWidth={strokeWidth} />
@@ -241,7 +242,7 @@ export function CatCristales({ size = 22, color = '#211C17', fill = 'transparent
 }
 
 // General — wrench
-export function CatGeneral({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatGeneral({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M14.5 3 Q18 3 19 6 Q20 9 17 11 L8 20 Q7 21 5.5 21 Q4 21 3 20 Q2 19 2 17.5 Q2 16 3 15 L12 6 Q13.5 4 14.5 3 Z"
@@ -252,7 +253,7 @@ export function CatGeneral({ size = 22, color = '#211C17', fill = 'transparent',
 }
 
 // Coche — simple car
-export function CatCoche({ size = 22, color = '#211C17', fill = 'transparent', strokeWidth = D.w }: IconProps) {
+export function CatCoche({ size = 22, color = C.ink, fill = 'transparent', strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M3 13 L6 8 Q7 7 9 7 L15 7 Q17 7 18 8 L21 13 L21 17 Q21 18 20 18 L4 18 Q3 18 3 17 Z"
@@ -267,7 +268,7 @@ export function CatCoche({ size = 22, color = '#211C17', fill = 'transparent', s
 
 // ── Empty-state illustration: clean nest ─────────────────────────────────────
 // Larger viewBox (80×80) for use as an illustration
-export function IlluNidoLimpio({ size = 100, color = '#C2502F', fill = '#F6E3D7' }: IconProps) {
+export function IlluNidoLimpio({ size = 100, color = C.brand, fill = C.brandWash }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 80 80" fill="none">
       {/* branch */}
@@ -312,7 +313,7 @@ export function IlluNidoLimpio({ size = 100, color = '#C2502F', fill = '#F6E3D7'
 // ─── ACHIEVEMENT ICONS ────────────────────────────────────────────────────────
 
 // Racha — llama / flame
-export function AchFlame({ size = 28, color = '#C2502F', fill = '#F6E3D7', strokeWidth = D.w }: IconProps) {
+export function AchFlame({ size = 28, color = C.brand, fill = C.brandWash, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M12 2 Q14 6 11 8 Q15 7 16 11 Q17 15 12 18 Q7 15 8 11 Q9 8 10 9 Q8 6 12 2 Z"
@@ -324,7 +325,7 @@ export function AchFlame({ size = 28, color = '#C2502F', fill = '#F6E3D7', strok
 }
 
 // Nido lleno — nest with eggs + star above
-export function AchNest({ size = 28, color = '#C2502F', fill = '#F6E3D7', strokeWidth = D.w }: IconProps) {
+export function AchNest({ size = 28, color = C.brand, fill = C.brandWash, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 15 Q4 20 12 20 Q20 20 20 15"
@@ -342,7 +343,7 @@ export function AchNest({ size = 28, color = '#C2502F', fill = '#F6E3D7', stroke
 }
 
 // Centena — star
-export function AchStar({ size = 28, color = '#C2502F', fill = '#F6E3D7', strokeWidth = D.w }: IconProps) {
+export function AchStar({ size = 28, color = C.brand, fill = C.brandWash, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M12 2 L14.4 8.3 L21.2 8.3 L15.9 12.4 L17.9 18.7 L12 14.6 L6.1 18.7 L8.1 12.4 L2.8 8.3 L9.6 8.3 Z"
@@ -352,7 +353,7 @@ export function AchStar({ size = 28, color = '#C2502F', fill = '#F6E3D7', stroke
 }
 
 // Maratón — trophy cup
-export function AchTrophy({ size = 28, color = '#C2502F', fill = '#F6E3D7', strokeWidth = D.w }: IconProps) {
+export function AchTrophy({ size = 28, color = C.brand, fill = C.brandWash, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* cup */}
@@ -372,7 +373,7 @@ export function AchTrophy({ size = 28, color = '#C2502F', fill = '#F6E3D7', stro
 }
 
 // Leyenda — gem / diamond
-export function AchGem({ size = 28, color = '#C2502F', fill = '#F6E3D7', strokeWidth = D.w }: IconProps) {
+export function AchGem({ size = 28, color = C.brand, fill = C.brandWash, strokeWidth = D.w }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* diamond shape */}

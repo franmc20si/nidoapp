@@ -123,7 +123,7 @@ export default function NidoScreen() {
     .reduce((sum, t) => sum + (t.points ?? 10), 0);
 
   // Reparto: % de tareas hechas por cada persona
-  const SHARE_PALETTE = [accent.hex, '#5B97C4', '#6FA368', '#C98A3C', '#8E6FCF'];
+  const SHARE_PALETTE = [accent.hex, C.suelo, C.general, C.cena, C.cristales];
   const buildShare = (list: Task[]) => {
     const byPerson = list.reduce<Record<string, number>>((acc, t) => {
       if (t.is_done && t.completed_by) acc[t.completed_by] = (acc[t.completed_by] ?? 0) + 1;

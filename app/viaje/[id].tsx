@@ -511,7 +511,7 @@ const a = StyleSheet.create({
   stepBtnOff: { opacity: 0.4 },
   stepTxt: { fontSize: 18, color: C.ink, fontFamily: FONT, fontWeight: '600', lineHeight: 20 },
   stepNum: { minWidth: 28, textAlign: 'center', fontSize: 17, color: C.ink, fontFamily: FONT, fontWeight: '700' },
-  error: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
+  error: { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
   save: { borderRadius: R.pill, paddingVertical: 16, alignItems: 'center' },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
 });

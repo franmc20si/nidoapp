@@ -427,5 +427,5 @@ const tb = StyleSheet.create({
 
   save: { backgroundColor: C.brand, borderRadius: R.pill, paddingVertical: 17, alignItems: 'center', shadowColor: C.brand, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
-  errorText: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
+  errorText: { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
 });

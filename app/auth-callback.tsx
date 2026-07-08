@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { ensureProfile, resolveDestination } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
+import { C } from '@/constants/theme';
 
 export default function AuthCallback() {
   const { setSession, setProfile, setHousehold } = useAuthStore();
@@ -57,7 +58,7 @@ export default function AuthCallback() {
 
   return (
     <View style={s.root}>
-      <ActivityIndicator size="large" color="#4A90D9" />
+      <ActivityIndicator size="large" color={C.brand} />
       <Text style={s.text}>{status}</Text>
     </View>
   );

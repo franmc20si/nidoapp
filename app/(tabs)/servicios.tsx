@@ -25,7 +25,7 @@ function daysUntil(sub: { next_payment: string | null; cycle: string }): number 
 
 function urgencyColor(days: number | null): string | null {
   if (days === null) return null;
-  if (days <= 3)  return '#c0392b';
+  if (days <= 3)  return C.danger;
   if (days <= 7)  return C.cena;
   if (days <= 14) return C.general;
   return null;
@@ -367,7 +367,7 @@ const s = StyleSheet.create({
   summaryRightLabel:  { fontSize: 11, color: C.ink3, fontFamily: FONT },
   summaryRightAmount: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.5, marginTop: 3 },
 
-  upcomingCard:  { marginHorizontal: 20, marginBottom: 14, backgroundColor: '#FEF3F2', borderRadius: R.l, borderWidth: 1, borderColor: '#FECDCA', padding: 16 },
+  upcomingCard:  { marginHorizontal: 20, marginBottom: 14, backgroundColor: C.dangerTint, borderRadius: R.l, borderWidth: 1, borderColor: C.dangerLine, padding: 16 },
   upcomingTitle: { fontSize: 13, fontWeight: '600', color: C.ink, fontFamily: FONT, marginBottom: 12 },
   upcomingRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   upcomingEmoji: { fontSize: 20 },

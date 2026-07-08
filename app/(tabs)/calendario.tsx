@@ -131,7 +131,7 @@ function PeriodSheet({
               <Text style={s.sheetTitle}>{isEdit ? 'Editar periodo' : 'Nuevo periodo'}</Text>
               {isEdit && (
                 <TouchableOpacity onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
-                  {deleting ? <ActivityIndicator size="small" color="#c0392b" /> : <Text style={s.deleteBtnText}>Eliminar</Text>}
+                  {deleting ? <ActivityIndicator size="small" color={C.danger} /> : <Text style={s.deleteBtnText}>Eliminar</Text>}
                 </TouchableOpacity>
               )}
             </View>
@@ -446,8 +446,8 @@ const s = StyleSheet.create({
 
   sheetHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sheetTitle: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4 },
-  deleteBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: '#c0392b' },
-  deleteBtnText: { color: '#c0392b', fontWeight: '600', fontSize: 13, fontFamily: FONT },
+  deleteBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.danger },
+  deleteBtnText: { color: C.danger, fontWeight: '600', fontSize: 13, fontFamily: FONT },
 
   rangeText: { fontSize: 14, color: C.ink2, fontFamily: FONT, marginBottom: 18 },
 
@@ -465,7 +465,7 @@ const s = StyleSheet.create({
   toggleKnob: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.white, alignSelf: 'flex-start' },
   toggleKnobOn: { alignSelf: 'flex-end' },
 
-  errorText: { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
+  errorText: { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
   save: { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center' },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
 });

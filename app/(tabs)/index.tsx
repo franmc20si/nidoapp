@@ -51,7 +51,7 @@ function daysLabel(days: number | null): string {
 
 function urgencyColor(days: number | null): string {
   if (days === null) return C.ink3;
-  if (days <= 3) return '#c0392b';
+  if (days <= 3) return C.danger;
   if (days <= 7) return C.cena;
   return C.ink3;
 }
@@ -415,13 +415,13 @@ export default function HoyScreen() {
               <View style={n.menuCols}>
                 <View style={[n.menuCol, comida && { backgroundColor: mixHex(C.paper, comida.color, 0.22), borderColor: mixHex(C.paper, comida.color, 0.4) }]}>
                   <Text style={n.menuSlot}>Comida</Text>
-                  <Text style={[n.menuDish, comida && { color: mixHex(comida.color, '#241E18', 0.55) }]} numberOfLines={2}>
+                  <Text style={[n.menuDish, comida && { color: mixHex(comida.color, C.ink, 0.55) }]} numberOfLines={2}>
                     {comida ? comida.name : '—'}
                   </Text>
                 </View>
                 <View style={[n.menuCol, cena && { backgroundColor: mixHex(C.paper, cena.color, 0.22), borderColor: mixHex(C.paper, cena.color, 0.4) }]}>
                   <Text style={n.menuSlot}>Cena</Text>
-                  <Text style={[n.menuDish, cena && { color: mixHex(cena.color, '#241E18', 0.55) }]} numberOfLines={2}>
+                  <Text style={[n.menuDish, cena && { color: mixHex(cena.color, C.ink, 0.55) }]} numberOfLines={2}>
                     {cena ? cena.name : '—'}
                   </Text>
                 </View>
@@ -573,8 +573,8 @@ const n = StyleSheet.create({
   nestPctRow: { marginBottom: 10 },
   nestPct: { fontSize: 34, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -1.5, lineHeight: 38 },
   nestPctSm: { fontSize: 14, color: C.ink2, fontWeight: '500' },
-  nestBar: { height: 7, borderRadius: 999, backgroundColor: C.ink + '12', overflow: 'hidden' },
-  nestBarFill: { height: '100%', borderRadius: 999 },
+  nestBar: { height: 7, borderRadius: R.pill, backgroundColor: C.ink + '12', overflow: 'hidden' },
+  nestBarFill: { height: '100%', borderRadius: R.pill },
 
   sectionGap: { marginTop: 12, paddingHorizontal: 20 },
 

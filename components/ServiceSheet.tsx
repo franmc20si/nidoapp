@@ -180,7 +180,7 @@ export default function ServiceSheet({ service, visible, onClose, onSaved, onDel
               {isEdit && (
                 <PressScale onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
                   {deleting
-                    ? <ActivityIndicator size="small" color="#c0392b" />
+                    ? <ActivityIndicator size="small" color={C.danger} />
                     : <Text style={s.deleteBtnText}>Eliminar</Text>}
                 </PressScale>
               )}
@@ -340,8 +340,8 @@ const s = StyleSheet.create({
 
   headerRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   sheetTitle:    { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4 },
-  deleteBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: '#c0392b' },
-  deleteBtnText: { color: '#c0392b', fontWeight: '600', fontSize: 13, fontFamily: FONT },
+  deleteBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.danger },
+  deleteBtnText: { color: C.danger, fontWeight: '600', fontSize: 13, fontFamily: FONT },
 
   label:      { fontSize: 12, fontWeight: '600', color: C.ink2, fontFamily: FONT, letterSpacing: 0.2, marginBottom: 10, textTransform: 'uppercase' },
 
@@ -367,7 +367,7 @@ const s = StyleSheet.create({
   bankAddChip:  { borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.paperSoft, borderStyle: 'dashed' },
   bankAddText:  { fontSize: 13.5, fontWeight: '600', color: C.ink3, fontFamily: FONT },
 
-  error:      { color: '#c0392b', fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
+  error:      { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 10, textAlign: 'center' },
   save:       { borderRadius: R.pill, paddingVertical: 17, alignItems: 'center', marginTop: 4 },
   saveDim:    { opacity: 0.5 },
   saveText:   { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },

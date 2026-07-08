@@ -11,8 +11,21 @@ export const C = {
   white:      '#FFFFFF',
 
   // brand
-  brand:      '#C2502F',
-  brandWash:  '#F6E3D7',
+  brand:        '#C2502F',
+  brandWash:    '#F6E3D7',
+  brandWashSoft:'#FEE8E1',  // wash más rosado (p. ej. fondo del botón Cerrar sesión)
+
+  // semantic
+  danger:     '#c0392b',
+  dangerTint: '#FEF3F2',
+  dangerLine: '#FECDCA',
+  success:    '#3A8B5C',    // toast de éxito
+  info:       '#44546A',    // toast informativo
+
+  // member / avatar accents (distinct from category colors)
+  olivo:      '#7FA86A',
+  lila:       '#A881F2',
+  coral:      '#D97B66',
 
   // categories
   cocina:     '#D9663F',  cocinaTint: '#F7E2D6',
@@ -35,3 +48,5 @@ export const R = {
 };
 
 export const FONT = 'Nohemi';
+
+export const MEMBER_COLORS = [C.brand, C.suelo, C.olivo, C.lila, C.coral];
