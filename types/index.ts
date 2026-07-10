@@ -32,6 +32,8 @@ export interface Task {
   is_done: boolean;
   is_recurring: boolean;
   recurrence_rule: string | null;
+  weekdays: number[] | null;   // 0=Lunes … 6=Domingo (recurrentes semanales ancladas a día)
+  day_slot: string | null;     // 'manana' | 'comida' | 'tarde' | 'noche'
   category: string | null;
   points: number | null;
   duration_min: number | null;

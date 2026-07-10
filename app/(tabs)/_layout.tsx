@@ -7,7 +7,8 @@ import {
 import { C, R, FONT } from '@/constants/theme';
 import { CATS } from '@/constants/categories';
 import { ptsFromMin } from '@/lib/taskTheme';
-import { RECURRENCE_OPTS, RecurrenceRule } from '@/lib/recurrence';
+import { RECURRENCE_OPTS, RecurrenceRule, DaySlot, firstWeeklyDue } from '@/lib/recurrence';
+import RecurrenceScheduler from '@/components/RecurrenceScheduler';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
@@ -56,9 +57,13 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
   const [category, setCategory] = useState<string | null>(null);
   const [min, setMin] = useState(30);
   const [recRule, setRecRule] = useState<RecurrenceRule>('weekly');
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [slot, setSlot] = useState<DaySlot | null>(null);
   const [saving, setSaving] = useState(false);
 
   const pts = ptsFromMin(min);
+  const toggleDay = (d: number) =>
+    setWeekdays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => a - b));
 
   const reset = () => {
     setKind('regular');
@@ -66,6 +71,8 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
     setCategory(null);
     setMin(30);
     setRecRule('weekly');
+    setWeekdays([]);
+    setSlot(null);
   };
 
   const handleClose = () => {
@@ -79,6 +86,7 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
     if (!title.trim() || !household) return;
     setSaving(true);
     setSaveError('');
+    const anchoredWeekly = kind === 'regular' && recRule === 'weekly' && weekdays.length > 0;
     try {
       const { error } = await withTimeout(
         supabase.from('tasks').insert({
@@ -87,6 +95,10 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
           created_by: user?.id,
           is_recurring: kind === 'regular',
           recurrence_rule: kind === 'regular' ? recRule : null,
+          weekdays: anchoredWeekly ? weekdays : null,
+          day_slot: kind === 'regular' ? slot : null,
+          // Semanal anclada → aparece en su día desde el principio.
+          ...(anchoredWeekly ? { due_date: firstWeeklyDue(weekdays) } : {}),
           category,
           points: pts,
           duration_min: min,
@@ -203,6 +215,16 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
                     );
                   })}
                 </ScrollView>
+
+                <View style={{ height: 14 }} />
+                <RecurrenceScheduler
+                  showDays={recRule === 'weekly'}
+                  weekdays={weekdays}
+                  onToggleDay={toggleDay}
+                  slot={slot}
+                  onSlot={setSlot}
+                  color={accent.hex}
+                />
               </>
             )}
 

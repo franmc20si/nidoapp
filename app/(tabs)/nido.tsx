@@ -113,7 +113,7 @@ export default function NidoScreen() {
     };
 
     if (markingDone && task.is_recurring && task.recurrence_rule) {
-      const due = nextDueDate(task.recurrence_rule);
+      const due = nextDueDate(task.recurrence_rule, new Date(), task.weekdays);
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt } : t));
       const { error } = await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
       if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: false } : t)); showToast('No se pudo actualizar la tarea', 'error'); return; }
@@ -127,7 +127,11 @@ export default function NidoScreen() {
   };
 
   const shown = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
-              : statusFilter === 'realizada'  ? tasks.filter(t => t.is_done)
+              : statusFilter === 'realizada'
+                // Histórico: de la más recientemente hecha a la más antigua
+                // (por completed_at, no por fecha de creación). Nulls al final.
+                ? tasks.filter(t => t.is_done)
+                        .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
               : tasks;
 
   const total = tasks.length;

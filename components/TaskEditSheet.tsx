@@ -6,7 +6,7 @@ import {
 import { C, R, FONT } from '@/constants/theme';
 import { CATS } from '@/constants/categories';
 import { ptsFromMin } from '@/lib/taskTheme';
-import { RECURRENCE_OPTS, RecurrenceRule } from '@/lib/recurrence';
+import { RECURRENCE_OPTS, RecurrenceRule, DaySlot, firstWeeklyDue } from '@/lib/recurrence';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 import { getCatIcon } from '@/components/icons';
@@ -14,6 +14,7 @@ import { Task } from '@/types';
 import { withTimeout } from '@/lib/withTimeout';
 import PressScale from '@/components/PressScale';
 import BottomSheet from '@/components/BottomSheet';
+import RecurrenceScheduler from '@/components/RecurrenceScheduler';
 
 const TIMES = [
   { label: '15 min', min: 15 },
@@ -38,6 +39,8 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
   const [min,      setMin]      = useState(30);
   const [recRule,  setRecRule]  = useState<RecurrenceRule>('weekly');
   const [isRec,    setIsRec]    = useState(true);
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [slot,     setSlot]     = useState<DaySlot | null>(null);
   const [saving,   setSaving]   = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error,    setError]    = useState('');
@@ -49,24 +52,36 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
       setMin(task.duration_min ?? 30);
       setIsRec(task.is_recurring);
       setRecRule((task.recurrence_rule as RecurrenceRule) ?? 'weekly');
+      setWeekdays(task.weekdays ?? []);
+      setSlot((task.day_slot as DaySlot) ?? null);
       setError('');
     }
   }, [task, visible]);
 
   const pts = ptsFromMin(min);
+  const toggleDay = (d: number) =>
+    setWeekdays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => a - b));
 
   const handleSave = async () => {
     if (!task || !title.trim()) return;
     setSaving(true);
     setError('');
-    const patch = {
+    const anchoredWeekly = isRec && recRule === 'weekly' && weekdays.length > 0;
+    const patch: Partial<Task> = {
       title: title.trim(),
       category,
       duration_min: min,
       points: pts,
       is_recurring: isRec,
       recurrence_rule: isRec ? recRule : null,
+      weekdays: anchoredWeekly ? weekdays : null,
+      day_slot: isRec ? slot : null,
     };
+    // Semanal anclada y pendiente → re-anclamos su próxima aparición al día que
+    // toque, para que "Semana" y la cuadrícula reflejen los días elegidos.
+    if (anchoredWeekly && !task.is_done) {
+      patch.due_date = firstWeeklyDue(weekdays);
+    }
     try {
       // Sin .select().single(): no necesitamos releer la fila (ya tenemos patch)
       // y así evitamos el error PGRST116 si el SELECT post-update devuelve 0 filas.
@@ -209,6 +224,16 @@ export default function TaskEditSheet({ task, visible, onClose, onSaved, onDelet
                     );
                   })}
                 </ScrollView>
+
+                <View style={{ height: 14 }} />
+                <RecurrenceScheduler
+                  showDays={recRule === 'weekly'}
+                  weekdays={weekdays}
+                  onToggleDay={toggleDay}
+                  slot={slot}
+                  onSlot={setSlot}
+                  color={accent.hex}
+                />
               </>
             )}
 
