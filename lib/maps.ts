@@ -1,9 +1,10 @@
 /**
- * maps — utilidades para los links de Google Maps de los viajes.
+ * maps — utilidades para los enlaces de los sitios de un viaje.
  *
- * No usamos ninguna API de mapas (sin key ni coste): de cada link intentamos
- * extraer el nombre del sitio para mostrar una tarjeta limpia con un pin, y al
- * tocarla abrimos el link en la app/web de Maps.
+ * Se admite CUALQUIER enlace (no solo Google Maps). Si el link es de Maps
+ * intentamos extraer el nombre del sitio para rellenar el título; en cualquier
+ * otro caso mostramos una etiqueta legible (el dominio) y, al tocar, abrimos el
+ * enlace en el navegador/app correspondiente.
  */
 import { Linking } from 'react-native';
 
@@ -43,16 +44,32 @@ export function extractPlaceName(url: string): string | null {
   return null;
 }
 
-/** ¿Parece un link de Google Maps? (para validar el campo al añadir). */
-export function looksLikeMapsUrl(url: string): boolean {
-  return /https?:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(url.trim());
+/** Normaliza un enlace pegado: si no trae esquema, le antepone https://. */
+export function normalizeUrl(url: string): string {
+  const u = url.trim();
+  if (!u) return u;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `https://${u}`;
 }
 
-/** Abre el link en Google Maps (app nativa o navegador). */
-export async function openMaps(url: string): Promise<void> {
+/** ¿Tiene pinta de enlace válido? (validación laxa: acepta cualquier dominio). */
+export function looksLikeUrl(url: string): boolean {
+  const u = url.trim();
+  // Con esquema, o algo tipo "dominio.tld[/...]" para permitir pegar sin https.
+  return /^[a-z][a-z0-9+.-]*:\/\/\S+$/i.test(u) || /^[^\s.]+\.[^\s.]{2,}(\S*)?$/i.test(u);
+}
+
+/** Etiqueta corta y legible de un enlace: el dominio sin "www." (o el original). */
+export function linkLabel(url: string): string {
+  const u = normalizeUrl(url);
+  const m = u.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i);
+  return m?.[1] ? m[1].replace(/^www\./i, '') : url.trim();
+}
+
+/** Abre el enlace en el navegador/app correspondiente. */
+export async function openLink(url: string): Promise<void> {
   if (!url) return;
   try {
-    await Linking.openURL(url);
+    await Linking.openURL(normalizeUrl(url));
   } catch {
     /* el link puede ser inválido; lo ignoramos en silencio */
   }

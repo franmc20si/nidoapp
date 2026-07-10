@@ -6,7 +6,7 @@ export const C = {
   card:       '#FFFDF8',
   ink:        '#211C17',
   ink2:       '#5A4F44',
-  ink3:       '#978876',
+  ink3:       '#75695A',  // gris apagado; oscurecido a ~4.6:1 sobre paper para pasar WCAG AA (antes #978876, ~3:1)
   line:       '#E2D8C4',
   white:      '#FFFFFF',
 

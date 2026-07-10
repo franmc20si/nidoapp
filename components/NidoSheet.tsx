@@ -57,7 +57,7 @@ export default function NidoSheet({ visible, onClose }: Props) {
           {/* Header */}
           <View style={sh.headerRow}>
             <Text style={sh.title}>Tu nido</Text>
-            <TouchableOpacity style={sh.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={sh.closeBtn} onPress={onClose} hitSlop={8}>
               <Text style={sh.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>

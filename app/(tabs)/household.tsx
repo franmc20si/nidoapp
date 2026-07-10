@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, TextInput, Image, ActivityIndicator, Platform, Share,
@@ -10,8 +10,10 @@ import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
+import { withTimeout } from '@/lib/withTimeout';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import NidoSheet from '@/components/NidoSheet';
+import PressScale from '@/components/PressScale';
 
 function computeStreak(completedDates: (string | null)[]): number {
   const daySet = new Set(
@@ -44,35 +46,45 @@ export default function ProfileScreen() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [stats, setStats] = useState({ tareas: '—', racha: '—', aportacion: '—' });
   const [configOpen, setConfigOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // Al pedir confirmación, el cuadro se renderiza al final del scroll: bajamos
+  // hasta él para que sea visible (si no, parece que el botón no hizo nada).
+  const revealConfirm = () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
 
   useEffect(() => { setNameVal(profile?.full_name ?? ''); }, [profile]);
 
   useEffect(() => {
     if (!user || !household) return;
     (async () => {
-      const [{ data: myTasks }, { count: totalDone }] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('completed_at')
-          .eq('household_id', household.id)
-          .eq('completed_by', user.id)
-          .eq('is_done', true),
-        supabase
-          .from('tasks')
-          .select('*', { count: 'exact', head: true })
-          .eq('household_id', household.id)
-          .eq('is_done', true),
-      ]);
-      const myCount = myTasks?.length ?? 0;
-      const streak = computeStreak((myTasks ?? []).map(t => t.completed_at));
-      const aportacion = (totalDone ?? 0) > 0
-        ? Math.round((myCount / (totalDone ?? 1)) * 100)
-        : 0;
-      setStats({
-        tareas:     String(myCount),
-        racha:      String(streak),
-        aportacion: `${aportacion}%`,
-      });
+      try {
+        const [{ data: myTasks }, { count: totalDone }] = await withTimeout(Promise.all([
+          supabase
+            .from('tasks')
+            .select('completed_at')
+            .eq('household_id', household.id)
+            .eq('completed_by', user.id)
+            .eq('is_done', true),
+          supabase
+            .from('tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('household_id', household.id)
+            .eq('is_done', true),
+        ]));
+        const myCount = myTasks?.length ?? 0;
+        const streak = computeStreak((myTasks ?? []).map(t => t.completed_at));
+        const aportacion = (totalDone ?? 0) > 0
+          ? Math.round((myCount / (totalDone ?? 1)) * 100)
+          : 0;
+        setStats({
+          tareas:     String(myCount),
+          racha:      String(streak),
+          aportacion: `${aportacion}%`,
+        });
+      } catch (e) {
+        // Fallo transitorio/timeout: dejamos los '—' en vez de crashear en silencio.
+        console.error('[perfil] stats error', e);
+      }
     })();
   }, [user?.id, household?.id]);
 
@@ -84,15 +96,22 @@ export default function ProfileScreen() {
     if (!nameVal.trim() || !user) return;
     setNameError('');
     setSavingName(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ full_name: nameVal.trim() })
-      .eq('id', user.id)
-      .select()
-      .single();
-    setSavingName(false);
-    if (!error && data) { setProfile(data); setEditingName(false); }
-    else setNameError(error?.message ?? 'No se pudo guardar');
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from('profiles')
+          .update({ full_name: nameVal.trim() })
+          .eq('id', user.id)
+          .select()
+          .single()
+      );
+      if (!error && data) { setProfile(data); setEditingName(false); }
+      else setNameError(error?.message ?? 'No se pudo guardar');
+    } catch (e: any) {
+      setNameError(e?.message === 'TIMEOUT' ? 'La conexión tardó demasiado. Inténtalo de nuevo.' : 'No se pudo guardar');
+    } finally {
+      setSavingName(false);
+    }
   };
 
   // ── upload photo ──────────────────────────────────────────────────────────
@@ -169,7 +188,7 @@ export default function ProfileScreen() {
   };
 
   // ── reset onboarding ──────────────────────────────────────────────────────
-  const resetOnboarding = () => setConfirmReset(true);
+  const resetOnboarding = () => { setConfirmReset(true); revealConfirm(); };
 
   const confirmResetAction = async () => {
     setConfirmReset(false);
@@ -198,11 +217,12 @@ export default function ProfileScreen() {
   };
 
   // ── sign out ──────────────────────────────────────────────────────────────
-  const handleSignOut = () => setConfirmSignOut(true);
+  const handleSignOut = () => { setConfirmSignOut(true); revealConfirm(); };
 
   return (
     <SafeAreaView style={s.root}>
       <ScrollView
+        ref={scrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
@@ -213,7 +233,7 @@ export default function ProfileScreen() {
 
         {/* Avatar */}
         <View style={s.hero}>
-          <TouchableOpacity style={s.avatarWrap} onPress={pickPhoto} activeOpacity={0.8}>
+          <PressScale style={s.avatarWrap} onPress={pickPhoto} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Cambiar foto de perfil">
             {uploadingPhoto ? (
               <View style={[s.avatar, { backgroundColor: accent.hex }]}>
                 <ActivityIndicator color={C.white} />
@@ -228,7 +248,7 @@ export default function ProfileScreen() {
             <View style={[s.cameraBtn, { backgroundColor: accent.hex }]}>
               <Text style={s.cameraIcon}>📷</Text>
             </View>
-          </TouchableOpacity>
+          </PressScale>
 
           {/* Name */}
           {editingName ? (
@@ -246,22 +266,23 @@ export default function ProfileScreen() {
                   style={[s.nameBtn, { backgroundColor: accent.hex }, savingName && { opacity: 0.5 }]}
                   onPress={saveName}
                   disabled={savingName}
+                  hitSlop={8}
                 >
                   {savingName
                     ? <ActivityIndicator color={C.white} size="small" />
                     : <Text style={s.nameBtnText}>✓</Text>}
                 </TouchableOpacity>
-                <TouchableOpacity style={s.nameCancelBtn} onPress={() => { setEditingName(false); setNameError(''); }}>
+                <TouchableOpacity style={s.nameCancelBtn} onPress={() => { setEditingName(false); setNameError(''); }} hitSlop={8}>
                   <Text style={s.nameCancelText}>✕</Text>
                 </TouchableOpacity>
               </View>
               {!!nameError && <Text style={s.inlineError}>{nameError}</Text>}
             </View>
           ) : (
-            <TouchableOpacity style={s.nameRow} onPress={() => setEditingName(true)} activeOpacity={0.7}>
+            <PressScale style={s.nameRow} onPress={() => setEditingName(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Editar tu nombre">
               <Text style={s.name}>{profile?.full_name ?? '—'}</Text>
               <Text style={s.editPencil}>✏︎</Text>
-            </TouchableOpacity>
+            </PressScale>
           )}
           {!!photoError && <Text style={[s.inlineError, { marginTop: 6 }]}>{photoError}</Text>}
         </View>
@@ -296,22 +317,26 @@ export default function ProfileScreen() {
                   <Text style={[s.code, { color: accent.hex }]}>{household.invite_code}</Text>
                 </View>
                 <View style={s.codeActions}>
-                  <TouchableOpacity
+                  <PressScale
                     style={[s.codeBtn, { backgroundColor: codeCopied ? accent.hex : accent.hex + '15', borderColor: accent.hex + '40' }]}
                     onPress={copyCode}
-                    activeOpacity={0.7}
+                    scaleTo={0.96}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copiar código de invitación"
                   >
                     <Text style={[s.codeBtnText, { color: codeCopied ? C.white : accent.hex }]}>
                       {codeCopied ? '✓ Copiado' : '📋 Copiar'}
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </PressScale>
+                  <PressScale
                     style={[s.codeBtn, { backgroundColor: accent.hex + '15', borderColor: accent.hex + '40' }]}
                     onPress={shareCode}
-                    activeOpacity={0.7}
+                    scaleTo={0.96}
+                    accessibilityRole="button"
+                    accessibilityLabel="Compartir código de invitación"
                   >
                     <Text style={[s.codeBtnText, { color: accent.hex }]}>↗ Compartir</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 </View>
               </>
             )}
@@ -320,38 +345,38 @@ export default function ProfileScreen() {
 
         {/* Settings rows */}
         <View style={s.settingsCard}>
-          <TouchableOpacity style={s.settingsRow} onPress={() => setConfigOpen(true)} activeOpacity={0.7}>
+          <PressScale style={s.settingsRow} onPress={() => setConfigOpen(true)} scaleTo={0.985} accessibilityRole="button" accessibilityLabel="Configurar nido">
             <Text style={s.settingsIcon}>⚙️</Text>
             <Text style={s.settingsLabel}>Configurar nido</Text>
             <Text style={s.settingsCaret}>›</Text>
-          </TouchableOpacity>
+          </PressScale>
           <View style={s.divider} />
-          <TouchableOpacity style={s.settingsRow} onPress={resetOnboarding} activeOpacity={0.7}>
+          <PressScale style={s.settingsRow} onPress={resetOnboarding} scaleTo={0.985} accessibilityRole="button" accessibilityLabel="Salir de este nido">
             <Text style={s.settingsIcon}>🚪</Text>
             <Text style={s.settingsLabel}>Salir de este nido</Text>
             <Text style={s.settingsCaret}>›</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
         {/* Sign out */}
-        <TouchableOpacity style={s.signOut} onPress={handleSignOut} activeOpacity={0.8}>
+        <PressScale style={s.signOut} onPress={handleSignOut} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Cerrar sesión">
           <Text style={s.signOutText}>Cerrar sesión</Text>
-        </TouchableOpacity>
+        </PressScale>
 
         {/* Inline confirm: reset onboarding */}
         {confirmReset && (
           <View style={s.confirmBox}>
             <Text style={s.confirmTitle}>¿Salir de este nido?</Text>
             <Text style={s.confirmSub}>
-              Dejarás de ser miembro de este nido. Si tienes otro, entrarás en él; si no, volverás al inicio.
+              Dejarás de ser miembro de este nido y volverás al inicio para crear o unirte a otro.
             </Text>
             <View style={s.confirmRow}>
-              <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmReset(false)}>
+              <PressScale style={s.confirmCancel} onPress={() => setConfirmReset(false)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Cancelar">
                 <Text style={s.confirmCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.confirmDanger} onPress={confirmResetAction}>
+              </PressScale>
+              <PressScale style={s.confirmDanger} onPress={confirmResetAction} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Salir del nido">
                 <Text style={s.confirmDangerText}>Salir del nido</Text>
-              </TouchableOpacity>
+              </PressScale>
             </View>
           </View>
         )}
@@ -362,12 +387,12 @@ export default function ProfileScreen() {
             <Text style={s.confirmTitle}>Cerrar sesión</Text>
             <Text style={s.confirmSub}>¿Seguro que quieres salir?</Text>
             <View style={s.confirmRow}>
-              <TouchableOpacity style={s.confirmCancel} onPress={() => setConfirmSignOut(false)}>
+              <PressScale style={s.confirmCancel} onPress={() => setConfirmSignOut(false)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Cancelar">
                 <Text style={s.confirmCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.confirmDanger} onPress={signOut}>
+              </PressScale>
+              <PressScale style={s.confirmDanger} onPress={signOut} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Cerrar sesión">
                 <Text style={s.confirmDangerText}>Cerrar sesión</Text>
-              </TouchableOpacity>
+              </PressScale>
             </View>
           </View>
         )}
@@ -411,8 +436,6 @@ const s = StyleSheet.create({
 
   card: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.l, padding: 18, borderWidth: 1.5, marginBottom: 14 },
   cardLabel: { fontSize: 10, letterSpacing: 1.5, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 6 },
-  cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT },
   colorDot: { width: 16, height: 16, borderRadius: 8 },
   nidoHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   nidoHeadName: { flex: 1, fontSize: 18, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3 },
@@ -422,16 +445,6 @@ const s = StyleSheet.create({
   codeActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
   codeBtn: { flex: 1, borderRadius: R.l, borderWidth: 1, paddingVertical: 9, alignItems: 'center' },
   codeBtnText: { fontSize: 13, fontWeight: '600', fontFamily: FONT },
-
-  nidoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 14, paddingVertical: 13, marginTop: 8 },
-  nidoRowName: { flex: 1, fontSize: 15, fontWeight: '500', color: C.ink, fontFamily: FONT },
-  nidoRowTag: { fontSize: 12, fontWeight: '600', fontFamily: FONT },
-  nidoRowSwitch: { fontSize: 13, color: C.ink3, fontFamily: FONT, fontWeight: '500' },
-
-  addNidoBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
-  addNidoIcon: { width: 32, height: 32, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },
-  addNidoIconText: { fontSize: 20, fontWeight: '400', lineHeight: 24 },
-  addNidoText: { fontSize: 14, fontWeight: '600', color: C.ink2, fontFamily: FONT },
 
   settingsCard: { marginHorizontal: 20, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 18, marginBottom: 14 },
   settingsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 },

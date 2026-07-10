@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useCalendarioStore } from '@/store/calendarioStore';
 import { useTripStore, TripItemInput } from '@/store/tripStore';
 import { TripItem, TripItemKind } from '@/types';
-import { extractPlaceName, looksLikeMapsUrl, openMaps } from '@/lib/maps';
+import { extractPlaceName, looksLikeUrl, openLink, linkLabel } from '@/lib/maps';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
@@ -21,8 +21,10 @@ const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 const KINDS: { key: TripItemKind; label: string; emoji: string }[] = [
-  { key: 'ver',    label: 'Ver',    emoji: '📸' },
-  { key: 'comer',  label: 'Comer',  emoji: '🍽️' },
+  { key: 'manana', label: 'Mañana', emoji: '☀️' },
+  { key: 'comida', label: 'Comida', emoji: '🍽️' },
+  { key: 'tarde',  label: 'Tarde',  emoji: '☕' },
+  { key: 'cena',   label: 'Cena',   emoji: '🌙' },
   { key: 'dormir', label: 'Dormir', emoji: '🛏️' },
 ];
 
@@ -103,8 +105,8 @@ function AddItemSheet({
   const handleSave = async () => {
     if (!household) return;
     const clean = url.trim();
-    if (!title.trim() && !clean) { setError('Añade un nombre o un link'); return; }
-    if (clean && !looksLikeMapsUrl(clean)) { setError('El link no parece de Google Maps'); return; }
+    if (!title.trim() && !clean) { setError('Añade un nombre o un enlace'); return; }
+    if (clean && !looksLikeUrl(clean)) { setError('El enlace no parece válido'); return; }
     setSaving(true); setError('');
     const place = clean ? extractPlaceName(clean) : null;
     const base = {
@@ -139,7 +141,7 @@ function AddItemSheet({
         />
         <TextInput
           style={a.field}
-          placeholder="Link de Google Maps (opcional)"
+          placeholder="Enlace (opcional)"
           placeholderTextColor={C.ink3}
           value={url}
           onChangeText={onChangeUrl}
@@ -180,7 +182,7 @@ function AddItemSheet({
         <Text style={a.hint}>
           {isLodging
             ? 'Si te quedas varias noches en el mismo sitio, sube las noches y se añadirá a cada día automáticamente. El precio es por noche.'
-            : 'Pega el enlace de “Compartir” de Google Maps. Mostraremos el sitio con un pin y, al tocarlo, se abrirá en Maps.'}
+            : 'Puedes pegar cualquier enlace (Google Maps, una web, una reserva…). Al tocar el sitio se abrirá el enlace.'}
         </Text>
 
         {error ? <Text style={a.error}>{error}</Text> : null}
@@ -195,25 +197,20 @@ function AddItemSheet({
 
 // ─── Tarjeta de un sitio ──────────────────────────────────────────────────────
 function ItemCard({ item, color, onDelete, compact }: { item: TripItem; color: string; onDelete: () => void; compact?: boolean }) {
+  const hasUrl = !!item.url;
+  const sub = hasUrl ? (item.place ?? linkLabel(item.url!)) : null;
   return (
     <View style={c.card}>
       <PressScale
         style={[c.tap, compact && c.tapC]}
-        onPress={() => item.url && openMaps(item.url)}
-        disabled={!item.url}
+        onPress={() => item.url && openLink(item.url)}
+        disabled={!hasUrl}
       >
-        <View style={[c.pin, compact && c.pinC, { backgroundColor: color }]}>
-          <Text style={compact ? c.pinGlyphC : c.pinGlyph}>📍</Text>
-        </View>
         <View style={{ flex: 1 }}>
-          <Text style={c.name} numberOfLines={compact ? 2 : 1}>{item.title}</Text>
+          <Text style={[c.name, compact && c.nameC]} numberOfLines={compact ? 3 : 2}>{item.title}</Text>
           {compact
             ? (item.price != null && <Text style={[c.priceC, { color }]}>{money(item.price)}</Text>)
-            : (
-              <Text style={c.sub} numberOfLines={1}>
-                {item.url ? (item.place ?? 'Ver en Google Maps') : 'Sin enlace'}
-              </Text>
-            )}
+            : (sub && <Text style={c.sub} numberOfLines={1}>{sub} ↗</Text>)}
         </View>
         {!compact && item.price != null && <Text style={[c.price, { color }]}>{money(item.price)}</Text>}
       </PressScale>
@@ -482,18 +479,15 @@ const s = StyleSheet.create({
 
 const c = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingRight: 6 },
-  tap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10 },
-  tapC: { gap: 8, padding: 8 },
-  pin: { width: 48, height: 48, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },
-  pinC: { width: 34, height: 34, borderRadius: 9 },
-  pinGlyph: { fontSize: 22 },
-  pinGlyphC: { fontSize: 16 },
-  name: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
-  sub: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
+  tap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, paddingLeft: 14, paddingRight: 4 },
+  tapC: { paddingVertical: 9, paddingLeft: 10, paddingRight: 2 },
+  name: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600' },
+  nameC: { fontSize: 13, marginBottom: 0 },
+  sub: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, marginTop: 2 },
   price: { fontSize: 14.5, fontFamily: FONT, fontWeight: '700', marginLeft: 8 },
-  priceC: { fontSize: 13, fontFamily: FONT, fontWeight: '700' },
+  priceC: { fontSize: 12.5, fontFamily: FONT, fontWeight: '700', marginTop: 3 },
   del: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  delC: { width: 26, alignSelf: 'flex-start', paddingTop: 6 },
+  delC: { width: 24, alignSelf: 'flex-start', paddingTop: 6 },
   delText: { fontSize: 15, color: C.ink3, fontFamily: FONT },
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
@@ -13,10 +13,12 @@ import { Task, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import StaggerItem from '@/components/StaggerItem';
+import PressScale from '@/components/PressScale';
 import { isDueAgain, nextDueDate } from '@/lib/recurrence';
 import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
+import { showToast } from '@/store/toastStore';
 import { getServiceCat } from '@/constants/services';
 import { nextPaymentDate, daysUntilNextPayment } from '@/lib/nextPayment';
 
@@ -286,9 +288,18 @@ export default function HoyScreen() {
         { household_id: household.id, week_key: wk, item_key: item.id },
         { onConflict: 'household_id,week_key,item_key' }
       ).then(() => {});
+      showToast('Comprado ✓', 'success', { label: 'Deshacer', onPress: () => {
+        setRecipeChecked(prev => { const n = new Set(prev); n.delete(item.id); return n; });
+        supabase.from('shopping_checks').delete()
+          .eq('household_id', household.id).eq('week_key', wk).eq('item_key', item.id).then(() => {});
+      }});
     } else {
       setManualItems(prev => prev.filter(m => m.id !== item.id));
       supabase.from('shopping_items').update({ is_checked: true }).eq('id', item.id).then(() => {});
+      showToast('Comprado ✓', 'success', { label: 'Deshacer', onPress: () => {
+        setManualItems(prev => prev.some(m => m.id === item.id) ? prev : [...prev, item]);
+        supabase.from('shopping_items').update({ is_checked: false }).eq('id', item.id).then(() => {});
+      }});
     }
   };
 
@@ -344,34 +355,42 @@ export default function HoyScreen() {
                 : '¡Nido completado!'}
             </Text>
           </View>
-          <TouchableOpacity
+          <PressScale
             style={[n.avatar, { backgroundColor: accent.hex }]}
             onPress={() => router.push('/(tabs)/household')}
-            activeOpacity={0.8}
+            scaleTo={0.92}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Abrir tu perfil"
           >
             <Text style={n.avatarText}>{(profile?.full_name?.[0] ?? 'T').toUpperCase()}</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
         {/* Nido chip + bell */}
         <View style={n.chipRow}>
-          <TouchableOpacity
+          <PressScale
             style={[n.nidoChip, { borderColor: accent.hex + '40' }]}
             onPress={() => setNidoSheetVisible(true)}
-            activeOpacity={0.8}
+            scaleTo={0.97}
+            accessibilityRole="button"
+            accessibilityLabel={`Nido ${household?.name ?? 'Nuestro nido'}, ajustes`}
           >
             <Text style={n.nidoChipNest}>🪺</Text>
             <Text style={n.nidoChipName}>{household?.name ?? 'Nuestro nido'}</Text>
             <View style={[n.accentDot, { backgroundColor: accent.hex }]} />
             <Text style={n.nidoChipCaret}>›</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </PressScale>
+          <PressScale
             style={[n.bellBtn, bellActive && { backgroundColor: accent.hex, borderColor: accent.hex }]}
-            activeOpacity={0.7}
+            scaleTo={0.9}
             onPress={() => setBellActive(v => !v)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Crear un aviso"
           >
             <Text style={n.bellIcon}>🔔</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
         <NidoSheet visible={nidoSheetVisible} onClose={() => setNidoSheetVisible(false)} />
@@ -470,18 +489,20 @@ export default function HoyScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 {pendingItems.map(item => (
-                  <TouchableOpacity
+                  <PressScale
                     key={item.id}
                     style={n.itemRow}
                     onPress={() => markBought(item)}
-                    activeOpacity={0.6}
+                    scaleTo={0.985}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Marcar ${item.name} como comprado`}
                   >
                     <View style={[n.itemCheck, { borderColor: C.compra }]} />
                     <Text style={n.itemName} numberOfLines={1}>
                       {item.name}
                       {item.unit ? <Text style={n.itemUnit}>  {item.unit}</Text> : null}
                     </Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 ))}
               </ScrollView>
             )}

@@ -299,6 +299,7 @@ function CustomTabBar({ state, navigation }: any) {
               style={tb.tab}
               onPress={() => navigation.navigate(tab.name)}
               activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10 }}
             >
               {isCenter ? (
                 <View style={[tb.centerPill, { backgroundColor: focused ? accent.hex + '22' : C.paperDeep }]}>

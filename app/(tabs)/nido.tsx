@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Platform, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -8,6 +8,7 @@ import { Task } from '@/types';
 import { C, R, FONT } from '@/constants/theme';
 import TaskCard from '@/components/TaskCard';
 import StaggerItem from '@/components/StaggerItem';
+import PressScale from '@/components/PressScale';
 import { AlertCards } from '@/components/AlertSystem';
 import { nextDueDate, isDueAgain } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
@@ -98,15 +99,30 @@ export default function NidoScreen() {
     const completedBy = markingDone ? (user?.id ?? null) : null;
     const completedAt = markingDone ? new Date().toISOString() : null;
 
+    // Snapshot de la tarea ANTES del cambio, para poder deshacer restaurando
+    // exactamente los campos previos (incl. due_date de las recurrentes).
+    const snapshot = task;
+    const undo = () => {
+      setTasks(prev => prev.map(t => t.id === task.id ? snapshot : t));
+      supabase.from('tasks').update({
+        is_done: snapshot.is_done,
+        due_date: (snapshot as any).due_date ?? null,
+        completed_by: snapshot.completed_by ?? null,
+        completed_at: snapshot.completed_at ?? null,
+      }).eq('id', task.id).then(() => {});
+    };
+
     if (markingDone && task.is_recurring && task.recurrence_rule) {
       const due = nextDueDate(task.recurrence_rule);
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, completed_by: completedBy, completed_at: completedAt } : t));
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt } : t));
       const { error } = await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
-      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: false } : t)); showToast('No se pudo actualizar la tarea', 'error'); }
+      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: false } : t)); showToast('No se pudo actualizar la tarea', 'error'); return; }
+      showToast('Hecho ✓', 'success', { label: 'Deshacer', onPress: undo });
     } else {
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: markingDone, completed_by: completedBy, completed_at: completedAt } : t));
       const { error } = await supabase.from('tasks').update({ is_done: markingDone, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
-      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !markingDone } : t)); showToast('No se pudo actualizar la tarea', 'error'); }
+      if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: !markingDone } : t)); showToast('No se pudo actualizar la tarea', 'error'); return; }
+      if (markingDone) showToast('Hecho ✓', 'success', { label: 'Deshacer', onPress: undo });
     }
   };
 
@@ -177,9 +193,9 @@ export default function NidoScreen() {
             <Text style={s.eyebrow}>TU NIDO</Text>
             <Text style={s.title}>{household?.name ?? 'Nuestro nido'}</Text>
           </View>
-          <TouchableOpacity style={[s.headerAddBtn, { backgroundColor: accent.hex }]} onPress={openFab} activeOpacity={0.8}>
+          <PressScale style={[s.headerAddBtn, { backgroundColor: accent.hex }]} onPress={openFab} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir tarea">
             <Text style={s.headerAddBtnText}>+ Tarea</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
         {/* Share meter card — esta semana */}
@@ -235,16 +251,18 @@ export default function NidoScreen() {
         {/* Status filter pills */}
         <View style={s.statusRow}>
           {(['pendiente', 'realizada', 'todas'] as const).map((k) => (
-            <TouchableOpacity
+            <PressScale
               key={k}
               style={[s.statusPill, statusFilter === k && { backgroundColor: accent.hex, borderColor: accent.hex }]}
               onPress={() => setStatusFilter(k)}
-              activeOpacity={0.8}
+              scaleTo={0.94}
+              accessibilityRole="button"
+              accessibilityLabel={k === 'pendiente' ? 'Filtro: por hacer' : k === 'realizada' ? 'Filtro: realizadas' : 'Filtro: todas'}
             >
               <Text style={[s.statusText, statusFilter === k && { color: C.white }]}>
                 {k === 'pendiente' ? 'Por hacer' : k === 'realizada' ? 'Realizadas' : 'Todas'}
               </Text>
-            </TouchableOpacity>
+            </PressScale>
           ))}
         </View>
 
@@ -272,12 +290,12 @@ export default function NidoScreen() {
           ))}
 
           {/* Add task button (ob-opt style) */}
-          <TouchableOpacity style={s.addBtn} activeOpacity={0.8} onPress={openFab}>
+          <PressScale style={s.addBtn} scaleTo={0.98} onPress={openFab} accessibilityRole="button" accessibilityLabel="Añadir tarea">
             <View style={s.addIcon}>
               <Text style={s.addIconText}>+</Text>
             </View>
             <Text style={s.addText}>Añadir tarea</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
       </ScrollView>

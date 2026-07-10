@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
+  RefreshControl, TextInput, Platform,
   ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,8 @@ import { useCalendarioStore, PeriodInput } from '@/store/calendarioStore';
 import { VacationPeriod } from '@/types';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import { IconChevronRight } from '@/components/icons';
+import BottomSheet from '@/components/BottomSheet';
+import PressScale from '@/components/PressScale';
 
 const VACATION_COLORS = ['#D9663F', '#5B97C4', '#6FA368', '#C06796', '#8E6FCF', '#C99A3C', '#4FA3B5', '#5C5650'];
 
@@ -121,18 +123,14 @@ function PeriodSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.scrim} activeOpacity={1} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={s.sheet}>
-          <View style={s.grab} />
-          <ScrollView style={s.sheetScroll} contentContainerStyle={s.sheetBody} keyboardShouldPersistTaps="handled">
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '88%' }}>
+      <ScrollView contentContainerStyle={s.sheetBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={s.sheetHeaderRow}>
               <Text style={s.sheetTitle}>{isEdit ? 'Editar periodo' : 'Nuevo periodo'}</Text>
               {isEdit && (
-                <TouchableOpacity onPress={handleDelete} disabled={deleting} style={s.deleteBtn}>
+                <PressScale onPress={handleDelete} disabled={deleting} style={s.deleteBtn} scaleTo={0.95} accessibilityRole="button" accessibilityLabel="Eliminar periodo">
                   {deleting ? <ActivityIndicator size="small" color={C.danger} /> : <Text style={s.deleteBtnText}>Eliminar</Text>}
-                </TouchableOpacity>
+                </PressScale>
               )}
             </View>
 
@@ -158,25 +156,30 @@ function PeriodSheet({
               ))}
             </View>
 
-            <TouchableOpacity style={s.tripRow} onPress={() => setIsTrip((v) => !v)} activeOpacity={0.8}>
+            <PressScale
+              style={s.tripRow}
+              onPress={() => setIsTrip((v) => !v)}
+              scaleTo={0.98}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: isTrip }}
+              accessibilityLabel="Es un viaje"
+            >
               <View style={{ flex: 1 }}>
                 <Text style={s.tripTitle}>Es un viaje ✈️</Text>
-                <Text style={s.tripHint}>Aparecerá en Viajes con planificación por días (ver/comer/dormir)</Text>
+                <Text style={s.tripHint}>Aparecerá en Viajes con planificación por franjas del día (mañana, comida, tarde, cena y dormir)</Text>
               </View>
               <View style={[s.toggle, isTrip && { backgroundColor: color, borderColor: color }]}>
                 <View style={[s.toggleKnob, isTrip && s.toggleKnobOn]} />
               </View>
-            </TouchableOpacity>
+            </PressScale>
 
             {error ? <Text style={s.errorText}>{error}</Text> : null}
 
-            <TouchableOpacity style={[s.save, { backgroundColor: color }]} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+            <PressScale style={[s.save, { backgroundColor: color }]} onPress={handleSave} disabled={saving} scaleTo={0.97} accessibilityRole="button" accessibilityLabel={isEdit ? 'Guardar cambios' : 'Guardar periodo'}>
               {saving ? <ActivityIndicator color={C.white} /> : <Text style={s.saveText}>{isEdit ? 'Guardar cambios' : 'Guardar periodo'}</Text>}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+            </PressScale>
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -190,6 +193,8 @@ function MonthCard({
   cardWidth?: number;
 }) {
   const weeks = monthMatrix(year, month);
+  const now = new Date();
+  const todayIso = toIso(now.getFullYear(), now.getMonth(), now.getDate());
   const monthPeriods = periods.filter((p) => {
     const monthStart = toIso(year, month, 1);
     const monthEnd = toIso(year, month, new Date(year, month + 1, 0).getDate());
@@ -210,6 +215,7 @@ function MonthCard({
             if (!iso) return <View key={di} style={s.dayCell} />;
             const period = periodForDay(periods, iso);
             const isPending = iso === pendingStart;
+            const isToday = iso === todayIso;
             const isStart = period && iso === period.start_date;
             const isEnd = period && iso === period.end_date;
             const day = Number(iso.split('-')[2]);
@@ -221,10 +227,11 @@ function MonthCard({
                     period && { backgroundColor: period.color },
                     period && isStart && { borderTopLeftRadius: R.s, borderBottomLeftRadius: R.s },
                     period && isEnd && { borderTopRightRadius: R.s, borderBottomRightRadius: R.s },
+                    isToday && (period ? s.dayTodayOn : s.dayToday),
                     isPending && s.dayPending,
                   ]}
                 >
-                  <Text style={[s.dayText, period && s.dayTextOn]}>{day}</Text>
+                  <Text style={[s.dayText, period && s.dayTextOn, isToday && !period && s.dayTextToday]}>{day}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -343,29 +350,39 @@ export default function CalendarioScreen() {
               <Text style={s.title}>Calendario</Text>
             </View>
             <View style={s.navRow}>
-              <TouchableOpacity style={s.tripsBtn} onPress={() => router.push('/viajes')} activeOpacity={0.85}>
+              <PressScale style={s.tripsBtn} onPress={() => router.push('/viajes')} scaleTo={0.95} hitSlop={8} accessibilityRole="button" accessibilityLabel="Ver viajes">
                 <Text style={s.tripsBtnText}>✈️ Viajes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </PressScale>
+              <PressScale
                 style={[s.navBtn, monthOffset === 0 && s.navBtnDisabled]}
                 disabled={monthOffset === 0}
                 onPress={() => setMonthOffset((o) => Math.max(0, o - 1))}
+                scaleTo={0.9}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Mes anterior"
               >
                 <View style={{ transform: [{ rotate: '180deg' }] }}>
                   <IconChevronRight size={18} color={monthOffset === 0 ? C.line : C.ink2} />
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.navBtn} onPress={() => setMonthOffset((o) => o + 1)}>
+              </PressScale>
+              <PressScale style={s.navBtn} onPress={() => setMonthOffset((o) => o + 1)} scaleTo={0.9} hitSlop={8} accessibilityRole="button" accessibilityLabel="Mes siguiente">
                 <IconChevronRight size={18} color={C.ink2} />
-              </TouchableOpacity>
+              </PressScale>
             </View>
           </View>
 
           {pendingStart && (
-            <TouchableOpacity style={s.pendingBar} onPress={() => setPendingStart(null)} activeOpacity={0.8}>
+            <PressScale style={s.pendingBar} onPress={() => setPendingStart(null)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Cancelar selección de días">
               <Text style={s.pendingText}>Selecciona el día de fin · {shortDate(pendingStart)} → …</Text>
               <Text style={s.pendingCancel}>Cancelar</Text>
-            </TouchableOpacity>
+            </PressScale>
+          )}
+
+          {!pendingStart && periods.length === 0 && (
+            <View style={s.hintBar}>
+              <Text style={s.hintText}>Toca el primer y el último día para marcar unas vacaciones o un viaje ✈️</Text>
+            </View>
           )}
 
           <View style={[s.monthsGrid, { gap }]}>
@@ -388,7 +405,10 @@ export default function CalendarioScreen() {
         visible={sheetOpen}
         period={editingPeriod}
         draftRange={draftRange}
-        onClose={() => { setSheetOpen(false); setEditingPeriod(null); setDraftRange(null); }}
+        // No limpiamos editingPeriod/draftRange aquí: así el contenido se
+        // mantiene mientras BottomSheet reproduce la animación de salida. Se
+        // sobreescriben en el próximo handleDayPress al reabrir.
+        onClose={() => setSheetOpen(false)}
       />
     </SafeAreaView>
   );
@@ -418,6 +438,9 @@ const s = StyleSheet.create({
   pendingText: { fontSize: 13, color: C.ink2, fontFamily: FONT, fontWeight: '500' },
   pendingCancel: { fontSize: 13, color: C.brand, fontFamily: FONT, fontWeight: '600' },
 
+  hintBar: { marginBottom: 14, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line },
+  hintText: { fontSize: 13, color: C.ink2, fontFamily: FONT, lineHeight: 18 },
+
   monthCard: { backgroundColor: C.card, borderRadius: R.xl, paddingHorizontal: 16, paddingVertical: 13, borderWidth: 1, borderColor: C.line },
   monthTitle: { fontSize: 16.5, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.3, padding: 5, marginBottom: 8 },
 
@@ -428,8 +451,11 @@ const s = StyleSheet.create({
   dayCell: { flex: 1, aspectRatio: 1.32, padding: 1.5 },
   dayFill: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   dayPending: { borderWidth: 2, borderColor: C.brand },
+  dayToday: { borderWidth: 1.5, borderColor: C.ink2 },
+  dayTodayOn: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.9)' },
   dayText: { fontSize: 12.5, color: C.ink2, fontFamily: FONT },
   dayTextOn: { color: C.white, fontWeight: '600' },
+  dayTextToday: { color: C.ink, fontWeight: '700' },
 
   legend: { marginTop: 10, gap: 6 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -437,11 +463,7 @@ const s = StyleSheet.create({
   legendLabel: { flex: 1, fontSize: 13.5, color: C.ink, fontFamily: FONT, fontWeight: '500' },
   legendRange: { fontSize: 12, color: C.ink3, fontFamily: FONT },
 
-  // Ficha
-  scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '88%' },
-  sheetScroll: {},
-  grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
+  // Ficha (BottomSheet aporta scrim + asa + KAV)
   sheetBody: { padding: 22, paddingBottom: 40 },
 
   sheetHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },

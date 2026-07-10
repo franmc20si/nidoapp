@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
@@ -13,6 +13,8 @@ import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
+import BottomSheet from '@/components/BottomSheet';
+import PressScale from '@/components/PressScale';
 
 // ─── color helpers ─────────────────────────────────────────────────────────
 function hexToRgb(h: string): [number, number, number] {
@@ -80,6 +82,14 @@ export default function MenuScreen() {
   const [showDishes, setShowDishes] = useState(false);
   const [showShop,   setShowShop]   = useState(false);
 
+  // Los sheets se montan siempre (para que BottomSheet anime entrada Y salida).
+  // Esta `key` sube en cada apertura → fuerza remount y estado de formulario
+  // fresco, como cuando se montaban/desmontaban con el gating anterior.
+  const [pickKey, setPickKey] = useState(0);
+  useEffect(() => { if (pick) setPickKey((k) => k + 1); }, [pick]);
+  const [editKey, setEditKey] = useState(0);
+  useEffect(() => { if (editing) setEditKey((k) => k + 1); }, [editing]);
+
   // ── compute ingredient list for this week ──────────────────────────────
   const weekIngredients = (() => {
     const seen = new Set<string>();
@@ -139,9 +149,9 @@ export default function MenuScreen() {
 
           {/* Navigation row */}
           <View style={s.navRow}>
-            <TouchableOpacity style={s.navBtn} onPress={() => setOffset(o => o - 1)} activeOpacity={0.7}>
+            <PressScale style={s.navBtn} onPress={() => setOffset(o => o - 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana anterior">
               <Text style={s.navArrow}>‹</Text>
-            </TouchableOpacity>
+            </PressScale>
 
             <Text style={s.rangeText} numberOfLines={1}>
               <Text style={{ color: dim }}>del </Text>
@@ -151,22 +161,22 @@ export default function MenuScreen() {
               <Text style={{ color: dim }}> de {MN_MONTHS[last.getMonth()]}</Text>
             </Text>
 
-            <TouchableOpacity style={s.navBtn} onPress={() => setOffset(o => o + 1)} activeOpacity={0.7}>
+            <PressScale style={s.navBtn} onPress={() => setOffset(o => o + 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana siguiente">
               <Text style={s.navArrow}>›</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         </View>
 
-        <TouchableOpacity style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')}>
+        <PressScale style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
           <Text style={s.addRecipeBtnText}>+ Receta</Text>
-        </TouchableOpacity>
+        </PressScale>
       </View>
 
       {/* "Esta semana" pill when navigated away */}
       {!isThisWeek && (
-        <TouchableOpacity style={s.todayPill} onPress={() => setOffset(0)} activeOpacity={0.8}>
+        <PressScale style={s.todayPill} onPress={() => setOffset(0)} scaleTo={0.95} accessibilityRole="button" accessibilityLabel="Ir a esta semana">
           <Text style={s.todayPillText}>Ir a esta semana</Text>
-        </TouchableOpacity>
+        </PressScale>
       )}
 
       <ScrollView alwaysBounceVertical={false} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 32 }}>
@@ -195,7 +205,7 @@ export default function MenuScreen() {
                 </View>
 
                 {/* comida */}
-                <TouchableOpacity
+                <PressScale
                   style={[
                     s.cell,
                     comidaRecipe
@@ -205,17 +215,19 @@ export default function MenuScreen() {
                         : { borderStyle: 'dashed' },
                   ]}
                   onPress={() => setPick({ day: i, meal: 'comida' })}
-                  activeOpacity={0.75}
+                  scaleTo={0.96}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${MN_DAYS_LONG[i]}, comida${comidaRecipe ? ': ' + comidaRecipe.name : comidaEvent ? ': ' + comidaEvent : ', añadir'}`}
                 >
                   {comidaRecipe
                     ? <Text style={[s.dishName, { color: mixHex(comidaRecipe.color, C.ink, 0.55) }]}>{comidaRecipe.name}</Text>
                     : comidaEvent
                       ? <Text style={s.eventCellName}>{comidaEvent}</Text>
                       : <Text style={s.cellPlus}>+</Text>}
-                </TouchableOpacity>
+                </PressScale>
 
                 {/* cena */}
-                <TouchableOpacity
+                <PressScale
                   style={[
                     s.cell,
                     cenaRecipe
@@ -225,14 +237,16 @@ export default function MenuScreen() {
                         : { borderStyle: 'dashed' },
                   ]}
                   onPress={() => setPick({ day: i, meal: 'cena' })}
-                  activeOpacity={0.75}
+                  scaleTo={0.96}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${MN_DAYS_LONG[i]}, cena${cenaRecipe ? ': ' + cenaRecipe.name : cenaEvent ? ': ' + cenaEvent : ', añadir'}`}
                 >
                   {cenaRecipe
                     ? <Text style={[s.dishName, { color: mixHex(cenaRecipe.color, C.ink, 0.55) }]}>{cenaRecipe.name}</Text>
                     : cenaEvent
                       ? <Text style={s.eventCellName}>{cenaEvent}</Text>
                       : <Text style={s.cellPlus}>+</Text>}
-                </TouchableOpacity>
+                </PressScale>
               </View>
             );
           })}
@@ -240,52 +254,51 @@ export default function MenuScreen() {
 
         {/* bottom buttons */}
         <View style={s.bottomBtns}>
-          <TouchableOpacity style={s.seeDishesBtn} onPress={() => setShowDishes(true)}>
+          <PressScale style={s.seeDishesBtn} onPress={() => setShowDishes(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Ver todos los platos">
             <Text style={s.seeDishesText}>Ver platos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash }]} onPress={() => setShowShop(true)}>
+          </PressScale>
+          <PressScale style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
             <Text style={[s.shopBtnText, { color: accent.hex }]}>
               🛒 Lista de la compra · Semana {week}
               {weekIngredients.length > 0 ? ` (${weekIngredients.length} ingredientes)` : ''}
             </Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </ScrollView>
 
       {/* ─── sheets ───────────────────────────────────────────────────────── */}
-      {pick && (
-        <PickSheet
-          day={MN_DAYS_LONG[pick.day]}
-          meal={pick.meal}
-          recipes={recipes.filter(r => r.meals.includes(pick.meal))}
-          current={plan[`${pick.day}-${pick.meal}`]}
-          onPick={assign}
-          onClose={() => setPick(null)}
-          onNewRecipe={() => {
-            const m = pick.meal;
-            setPick(null);
-            setTimeout(() => setEditing({ id: '', name: '', color: DISH_COLORS[0], meals: [m] }), 80);
-          }}
-        />
-      )}
+      <PickSheet
+        key={pickKey}
+        visible={!!pick}
+        day={pick ? MN_DAYS_LONG[pick.day] : ''}
+        meal={pick?.meal ?? 'comida'}
+        recipes={pick ? recipes.filter(r => r.meals.includes(pick.meal)) : []}
+        current={pick ? plan[`${pick.day}-${pick.meal}`] : undefined}
+        onPick={assign}
+        onClose={() => setPick(null)}
+        onNewRecipe={() => {
+          const m = pick?.meal ?? 'comida';
+          setPick(null);
+          setTimeout(() => setEditing({ id: '', name: '', color: DISH_COLORS[0], meals: [m] }), 80);
+        }}
+      />
 
-      {showDishes && (
-        <DishesSheet
-          recipes={recipes}
-          onClose={() => setShowDishes(false)}
-          onEdit={r => { setShowDishes(false); setTimeout(() => setEditing(r), 80); }}
-          onNew={() => { setShowDishes(false); setTimeout(() => setEditing('new'), 80); }}
-        />
-      )}
+      <DishesSheet
+        visible={showDishes}
+        recipes={recipes}
+        onClose={() => setShowDishes(false)}
+        onEdit={r => { setShowDishes(false); setTimeout(() => setEditing(r), 80); }}
+        onNew={() => { setShowDishes(false); setTimeout(() => setEditing('new'), 80); }}
+      />
 
-      {editing && (
-        <RecipeSheet
-          recipe={editing === 'new' ? null : editing as Recipe}
-          onClose={() => setEditing(null)}
-          onSave={saveRecipe}
-          onDelete={deleteRecipe}
-        />
-      )}
+      <RecipeSheet
+        key={editKey}
+        visible={!!editing}
+        recipe={editing === 'new' ? null : (editing as Recipe | null)}
+        onClose={() => setEditing(null)}
+        onSave={saveRecipe}
+        onDelete={deleteRecipe}
+      />
 
       <ShoppingListSheet
         visible={showShop}
@@ -301,12 +314,18 @@ export default function MenuScreen() {
 }
 
 // ─── PickSheet ──────────────────────────────────────────────────────────────
-function PickSheet({ day, meal, recipes, current, onPick, onClose, onNewRecipe }: {
-  day: string; meal: 'comida'|'cena'; recipes: Recipe[];
+function PickSheet({ visible, day, meal, recipes, current, onPick, onClose, onNewRecipe }: {
+  visible: boolean; day: string; meal: 'comida'|'cena'; recipes: Recipe[];
   current?: string; onPick: (id: string|null) => void;
   onClose: () => void; onNewRecipe: () => void;
 }) {
-  const currentEventName = current?.startsWith('event:') ? current.slice(6) : '';
+  // Retiene los últimos datos con el sheet abierto para que el contenido no
+  // parpadee durante la animación de salida (cuando los props ya llegan vacíos).
+  const snap = useRef({ day, meal, recipes, current });
+  if (visible) snap.current = { day, meal, recipes, current };
+  const { day: dDay, meal: dMeal, recipes: dRecipes, current: dCurrent } = snap.current;
+
+  const currentEventName = dCurrent?.startsWith('event:') ? dCurrent.slice(6) : '';
   const [eventText, setEventText] = useState(currentEventName);
   const isEventActive = !!currentEventName;
 
@@ -317,134 +336,142 @@ function PickSheet({ day, meal, recipes, current, onPick, onClose, onNewRecipe }
   };
 
   return (
-    <Modal visible transparent animationType="slide">
-      <TouchableOpacity style={sh.scrim} activeOpacity={1} onPress={onClose} />
-      <View style={sh.sheet}>
-        <View style={sh.grab} />
-        <View style={sh.body}>
-          <View style={sh.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={sh.eyebrow}>{meal === 'comida' ? 'Comida' : 'Cena'} · {day}</Text>
-              <Text style={sh.title}>Elige un plato</Text>
-            </View>
-            <TouchableOpacity style={sh.iconBtn} onPress={onClose}>
-              <Text style={sh.iconBtnText}>✕</Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={sh.body}>
+        <View style={sh.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={sh.eyebrow}>{dMeal === 'comida' ? 'Comida' : 'Cena'} · {dDay}</Text>
+            <Text style={sh.title}>Elige un plato</Text>
+          </View>
+          <TouchableOpacity style={sh.iconBtn} onPress={onClose}>
+            <Text style={sh.iconBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
+          {dRecipes.length === 0 && (
+            <Text style={sh.muted}>Todavía no hay platos para {dMeal === 'comida' ? 'la comida' : 'la cena'}.</Text>
+          )}
+          {dRecipes.map(r => (
+            <PressScale
+              key={r.id}
+              style={[sh.recipeRow, !isEventActive && dCurrent === r.id && { borderColor: C.brand, backgroundColor: C.brandWash }]}
+              onPress={() => onPick(r.id)}
+              scaleTo={0.98}
+              accessibilityRole="button"
+              accessibilityLabel={`Elegir ${r.name}`}
+            >
+              <View style={[sh.rdot, { backgroundColor: r.color }]} />
+              <Text style={sh.rname}>{r.name}</Text>
+              {!isEventActive && dCurrent === r.id && <Text style={{ color: C.brand, fontWeight: '700' }}>✓</Text>}
+            </PressScale>
+          ))}
+
+          <View style={sh.sectionDivider} />
+          <Text style={sh.sectionTitle}>Añade un evento</Text>
+          <View style={[sh.eventRow, isEventActive && { borderColor: C.brand, backgroundColor: C.brandWash }]}>
+            <TextInput
+              style={sh.eventInput}
+              value={eventText}
+              onChangeText={setEventText}
+              placeholder="Ej: Cumpleaños, Restaurante…"
+              placeholderTextColor={C.ink3}
+              returnKeyType="done"
+              onSubmitEditing={submitEvent}
+            />
+            <TouchableOpacity
+              style={[sh.eventBtn, !eventText.trim() && { opacity: 0.35 }]}
+              onPress={submitEvent}
+              disabled={!eventText.trim()}
+              activeOpacity={0.8}
+            >
+              <Text style={sh.eventBtnText}>Añadir</Text>
             </TouchableOpacity>
           </View>
+        </ScrollView>
 
-          <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
-            {recipes.length === 0 && (
-              <Text style={sh.muted}>Todavía no hay platos para {meal === 'comida' ? 'la comida' : 'la cena'}.</Text>
-            )}
-            {recipes.map(r => (
-              <TouchableOpacity
-                key={r.id}
-                style={[sh.recipeRow, !isEventActive && current === r.id && { borderColor: C.brand, backgroundColor: C.brandWash }]}
-                onPress={() => onPick(r.id)}
-              >
-                <View style={[sh.rdot, { backgroundColor: r.color }]} />
-                <Text style={sh.rname}>{r.name}</Text>
-                {!isEventActive && current === r.id && <Text style={{ color: C.brand, fontWeight: '700' }}>✓</Text>}
-              </TouchableOpacity>
-            ))}
-
-            <View style={sh.sectionDivider} />
-            <Text style={sh.sectionTitle}>Añade un evento</Text>
-            <View style={[sh.eventRow, isEventActive && { borderColor: C.brand, backgroundColor: C.brandWash }]}>
-              <TextInput
-                style={sh.eventInput}
-                value={eventText}
-                onChangeText={setEventText}
-                placeholder="Ej: Cumpleaños, Restaurante…"
-                placeholderTextColor={C.ink3}
-                returnKeyType="done"
-                onSubmitEditing={submitEvent}
-              />
-              <TouchableOpacity
-                style={[sh.eventBtn, !eventText.trim() && { opacity: 0.35 }]}
-                onPress={submitEvent}
-                disabled={!eventText.trim()}
-                activeOpacity={0.8}
-              >
-                <Text style={sh.eventBtnText}>Añadir</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-
-          <View style={[sh.row, { marginTop: 18, gap: 10 }]}>
-            <TouchableOpacity onPress={() => onPick(null)} disabled={!current}>
-              <Text style={[sh.linkBtn, { color: current ? C.brand : C.ink3 }]}>Vaciar hueco</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={sh.ghostBtn} onPress={onNewRecipe}>
-              <Text style={sh.ghostBtnText}>+ Nueva receta</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={[sh.row, { marginTop: 18, gap: 10 }]}>
+          <TouchableOpacity onPress={() => onPick(null)} disabled={!dCurrent}>
+            <Text style={[sh.linkBtn, { color: dCurrent ? C.brand : C.ink3 }]}>Vaciar hueco</Text>
+          </TouchableOpacity>
+          <PressScale style={sh.ghostBtn} onPress={onNewRecipe} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Nueva receta">
+            <Text style={sh.ghostBtnText}>+ Nueva receta</Text>
+          </PressScale>
         </View>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 // ─── DishesSheet ────────────────────────────────────────────────────────────
-function DishesSheet({ recipes, onClose, onEdit, onNew }: {
-  recipes: Recipe[]; onClose: () => void;
+function DishesSheet({ visible, recipes, onClose, onEdit, onNew }: {
+  visible: boolean; recipes: Recipe[]; onClose: () => void;
   onEdit: (r: Recipe) => void; onNew: () => void;
 }) {
   return (
-    <Modal visible transparent animationType="slide">
-      <TouchableOpacity style={sh.scrim} activeOpacity={1} onPress={onClose} />
-      <View style={sh.sheet}>
-        <View style={sh.grab} />
-        <View style={sh.body}>
-          <View style={sh.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={sh.eyebrow}>{recipes.length} platos</Text>
-              <Text style={sh.title}>Todos los platos</Text>
-            </View>
-            <TouchableOpacity style={sh.iconBtn} onPress={onClose}>
-              <Text style={sh.iconBtnText}>✕</Text>
-            </TouchableOpacity>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View style={sh.body}>
+        <View style={sh.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={sh.eyebrow}>{recipes.length} platos</Text>
+            <Text style={sh.title}>Todos los platos</Text>
           </View>
-
-          <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
-            {recipes.map(r => (
-              <TouchableOpacity key={r.id} style={sh.recipeRow} onPress={() => onEdit(r)}>
-                <View style={[sh.rdot, { backgroundColor: r.color }]} />
-                <Text style={sh.rname}>{r.name}</Text>
-                <MealTags meals={r.meals} />
-                <Text style={{ color: C.ink3, fontSize: 16 }}>✏︎</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity style={[sh.ghostBtn, { marginTop: 18, alignSelf: 'stretch' }]} onPress={onNew}>
-            <Text style={sh.ghostBtnText}>+ Añadir receta</Text>
+          <TouchableOpacity style={sh.iconBtn} onPress={onClose}>
+            <Text style={sh.iconBtnText}>✕</Text>
           </TouchableOpacity>
         </View>
+
+        <ScrollView style={{ marginTop: 18 }} showsVerticalScrollIndicator={false}>
+          {recipes.map(r => (
+            <PressScale key={r.id} style={sh.recipeRow} onPress={() => onEdit(r)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel={`Editar ${r.name}`}>
+              <View style={[sh.rdot, { backgroundColor: r.color }]} />
+              <Text style={sh.rname}>{r.name}</Text>
+              <MealTags meals={r.meals} />
+              <Text style={{ color: C.ink3, fontSize: 16 }}>✏︎</Text>
+            </PressScale>
+          ))}
+        </ScrollView>
+
+        <PressScale style={[sh.ghostBtn, { marginTop: 18, alignSelf: 'stretch' }]} onPress={onNew} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
+          <Text style={sh.ghostBtnText}>+ Añadir receta</Text>
+        </PressScale>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 // ─── RecipeSheet ────────────────────────────────────────────────────────────
-function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
-  recipe: Recipe | null; onClose: () => void;
+function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
+  visible: boolean; recipe: Recipe | null; onClose: () => void;
   onSave: (data: Recipe) => void; onDelete: (id: string) => void;
 }) {
+  // Retiene la receta con el sheet abierto (para no perder isEdit/título/borrar
+  // mientras se anima la salida, cuando recipe ya llega null).
+  const snap = useRef(recipe);
+  if (visible) snap.current = recipe;
+  const r = snap.current;
+
   const [name,        setName]        = useState(recipe?.name  ?? '');
   const [color,       setColor]       = useState(recipe?.color ?? DISH_COLORS[0]);
   const [meals,       setMeals]       = useState<('comida'|'cena')[]>(recipe?.meals ?? ['comida', 'cena']);
   const [ingredients, setIngredients] = useState<Ingredient[]>(recipe?.ingredients ?? []);
   const [ingName,       setIngName]       = useState('');
+  const [ingAmount,     setIngAmount]     = useState('');
   const [ingCat,        setIngCat]        = useState('otros');
   const [showCatPicker, setShowCatPicker] = useState(false);
-  const isEdit = !!(recipe?.id);
+  const isEdit = !!(r?.id);
 
   const addIngredient = () => {
     if (!ingName.trim()) return;
-    const ing: Ingredient = { id: 'ing' + Date.now(), name: ingName.trim(), category: ingCat };
+    const ing: Ingredient = {
+      id: 'ing' + Date.now(),
+      name: ingName.trim(),
+      category: ingCat,
+      ...(ingAmount.trim() ? { amount: ingAmount.trim() } : {}),
+    };
     setIngredients(prev => [...prev, ing]);
     setIngName('');
+    setIngAmount('');
     setShowCatPicker(false);
   };
   const removeIngredient = (id: string) => setIngredients(prev => prev.filter(i => i.id !== id));
@@ -456,18 +483,15 @@ function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
 
   const handleSave = () => {
     if (!valid) return;
-    onSave({ ...(recipe ?? {}), id: recipe?.id ?? '', name: name.trim(), color, meals, ingredients } as Recipe);
+    onSave({ ...(r ?? {}), id: r?.id ?? '', name: name.trim(), color, meals, ingredients } as Recipe);
   };
 
   const previewBg     = mixHex(C.paper, color, 0.28);
   const previewBorder = mixHex(C.paper, color, 0.42);
 
   return (
-    <Modal visible transparent animationType="slide">
-      <TouchableOpacity style={sh.scrim} activeOpacity={1} onPress={onClose} />
-      <View style={sh.sheet}>
-        <View style={sh.grab} />
-        <ScrollView style={sh.body} showsVerticalScrollIndicator={false}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '90%' }}>
+      <ScrollView style={sh.body} showsVerticalScrollIndicator={false}>
           <View style={sh.row}>
             <Text style={sh.title}>{isEdit ? 'Editar receta' : 'Añadir receta'}</Text>
             <TouchableOpacity style={sh.iconBtn} onPress={onClose}>
@@ -529,6 +553,7 @@ function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
             <View key={ing.id} style={sh.ingRow}>
               <Text style={sh.ingEmoji}>{GROCERY_CATS.find(c => c.key === ing.category)?.emoji ?? '🛒'}</Text>
               <Text style={sh.ingName}>{ing.name}</Text>
+              {ing.amount ? <Text style={sh.ingAmount}>{ing.amount}</Text> : null}
               <TouchableOpacity onPress={() => removeIngredient(ing.id)} style={{ padding: 4 }}>
                 <Text style={{ color: C.ink3, fontSize: 14 }}>✕</Text>
               </TouchableOpacity>
@@ -544,6 +569,15 @@ function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
                 placeholderTextColor={C.ink3}
                 value={ingName}
                 onChangeText={setIngName}
+                returnKeyType="done"
+                onSubmitEditing={addIngredient}
+              />
+              <TextInput
+                style={sh.ingAmountInput}
+                placeholder="Cant."
+                placeholderTextColor={C.ink3}
+                value={ingAmount}
+                onChangeText={setIngAmount}
                 returnKeyType="done"
                 onSubmitEditing={addIngredient}
               />
@@ -581,24 +615,26 @@ function RecipeSheet({ recipe, onClose, onSave, onDelete }: {
             )}
           </View>
 
-          <TouchableOpacity
+          <PressScale
             style={[sh.primaryBtn, !valid && { opacity: 0.4 }]}
             onPress={handleSave}
             disabled={!valid}
+            scaleTo={0.97}
+            accessibilityRole="button"
+            accessibilityLabel={isEdit ? 'Guardar cambios' : 'Guardar receta'}
           >
             <Text style={sh.primaryBtnText}>{isEdit ? 'Guardar cambios' : 'Guardar receta'}</Text>
-          </TouchableOpacity>
+          </PressScale>
 
           {isEdit && (
-            <TouchableOpacity style={{ marginTop: 4, alignItems: 'center', paddingVertical: 14 }} onPress={() => onDelete(recipe!.id)}>
+            <TouchableOpacity style={{ marginTop: 4, alignItems: 'center', paddingVertical: 14 }} onPress={() => onDelete(r!.id)}>
               <Text style={{ color: C.ink3, fontFamily: FONT, fontSize: 14 }}>Eliminar plato</Text>
             </TouchableOpacity>
           )}
 
           <View style={{ height: 24 }} />
-        </ScrollView>
-      </View>
-    </Modal>
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -694,9 +730,7 @@ const s = StyleSheet.create({
 });
 
 const sh = StyleSheet.create({
-  scrim:  { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
-  sheet:  { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl },
-  grab:   { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginTop: 12 },
+  // BottomSheet aporta scrim + asa + KAV; aquí solo el cuerpo y su contenido.
   body:   { padding: 22, paddingBottom: 0, maxHeight: 580 },
   row:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   eyebrow:{ fontSize: 11, letterSpacing: 1.5, color: C.ink3, fontFamily: FONT, fontWeight: '600', textTransform: 'uppercase', marginBottom: 2 },
@@ -747,9 +781,11 @@ const sh = StyleSheet.create({
   ingRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.line },
   ingEmoji:   { fontSize: 18, width: 26, textAlign: 'center' },
   ingName:    { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT },
+  ingAmount:  { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
   ingAdd:     { marginTop: 10, backgroundColor: C.paperSoft, borderRadius: R.l, padding: 10, marginBottom: 4 },
   ingAddRow:  { flexDirection: 'row', gap: 8, alignItems: 'center' },
   ingInput:   { flex: 1, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, color: C.ink, backgroundColor: C.card, fontFamily: FONT },
+  ingAmountInput: { width: 62, borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 8, paddingVertical: 11, fontSize: 14, color: C.ink, backgroundColor: C.card, fontFamily: FONT, textAlign: 'center' },
   ingCatBtn:  { width: 46, height: 46, borderRadius: R.l, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   ingAddBtn:  { width: 46, height: 46, borderRadius: R.l, alignItems: 'center', justifyContent: 'center' },
   ingCatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },

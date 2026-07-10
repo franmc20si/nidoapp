@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import PressScale from '@/components/PressScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
@@ -144,15 +145,15 @@ export default function ServiciosScreen() {
             <Text style={s.title}>Servicios</Text>
           </View>
           <View style={s.actions}>
-            <TouchableOpacity style={s.utilBtn} onPress={() => router.push('/casas')} activeOpacity={0.8}>
-              <Text style={s.utilBtnText}>🏠 Casas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.utilBtn} onPress={() => router.push('/bancos')} activeOpacity={0.8}>
-              <Text style={s.utilBtnText}>🏦 Bancos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>
+            <PressScale style={s.iconBtn} onPress={() => router.push('/casas')} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Casas">
+              <Text style={s.iconBtnGlyph}>🏠</Text>
+            </PressScale>
+            <PressScale style={s.iconBtn} onPress={() => router.push('/bancos')} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Bancos">
+              <Text style={s.iconBtnGlyph}>🏦</Text>
+            </PressScale>
+            <PressScale style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir servicio">
               <Text style={s.addBtnText}>+ Añadir</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         </View>
 
@@ -164,36 +165,42 @@ export default function ServiciosScreen() {
             contentContainerStyle={s.filterRow}
             keyboardShouldPersistTaps="handled"
           >
-            <TouchableOpacity
+            <PressScale
               style={[s.filterChip, houseFilter === 'all' && { backgroundColor: accent.hex, borderColor: accent.hex }]}
               onPress={() => setHouseFilter('all')}
-              activeOpacity={0.8}
+              scaleTo={0.94}
+              accessibilityRole="button"
+              accessibilityLabel="Ver todas las casas"
             >
               <Text style={[s.filterChipText, houseFilter === 'all' && { color: C.white }]}>Todas</Text>
-            </TouchableOpacity>
+            </PressScale>
             {houses.map((h) => {
               const on = houseFilter === h.id;
               const col = nidoColorByKey(h.color);
               return (
-                <TouchableOpacity
+                <PressScale
                   key={h.id}
                   style={[s.filterChip, on && { borderColor: col.hex, backgroundColor: col.wash }]}
                   onPress={() => setHouseFilter(h.id)}
-                  activeOpacity={0.8}
+                  scaleTo={0.94}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filtrar por casa ${h.name}`}
                 >
                   <View style={[s.filterDot, { backgroundColor: col.hex }]} />
                   <Text style={[s.filterChipText, on && { color: col.hex }]}>{h.name}</Text>
-                </TouchableOpacity>
+                </PressScale>
               );
             })}
             {noHouseCount > 0 && (
-              <TouchableOpacity
+              <PressScale
                 style={[s.filterChip, houseFilter === 'none' && { backgroundColor: C.ink, borderColor: C.ink }]}
                 onPress={() => setHouseFilter('none')}
-                activeOpacity={0.8}
+                scaleTo={0.94}
+                accessibilityRole="button"
+                accessibilityLabel="Servicios sin casa"
               >
                 <Text style={[s.filterChipText, houseFilter === 'none' && { color: C.white }]}>Sin casa</Text>
-              </TouchableOpacity>
+              </PressScale>
             )}
           </ScrollView>
         )}
@@ -224,14 +231,14 @@ export default function ServiciosScreen() {
               const cat  = getServiceCat(sub.category);
               const col  = urgencyColor(days) ?? C.cena;
               return (
-                <TouchableOpacity key={sub.id} style={s.upcomingRow} onPress={() => openEdit(sub)} activeOpacity={0.7}>
+                <PressScale key={sub.id} style={s.upcomingRow} onPress={() => openEdit(sub)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel={`Editar ${sub.name}`}>
                   <Text style={s.upcomingEmoji}>{cat.emoji}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={s.upcomingName}>{sub.name}</Text>
                     <Text style={[s.upcomingDays, { color: col }]}>{daysLabel(days)}</Text>
                   </View>
                   <Text style={[s.upcomingAmt, { color: col }]}>{sub.amount.toFixed(2).replace('.', ',')} €</Text>
-                </TouchableOpacity>
+                </PressScale>
               );
             })}
           </View>
@@ -243,9 +250,9 @@ export default function ServiciosScreen() {
             <Text style={s.emptyEmoji}>🏠</Text>
             <Text style={s.emptyTitle}>Sin servicios todavía</Text>
             <Text style={s.emptySub}>Añade la luz, el internet o cualquier gasto fijo del hogar</Text>
-            <TouchableOpacity style={[s.emptyBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>
+            <PressScale style={[s.emptyBtn, { backgroundColor: accent.hex }]} onPress={openNew} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Añadir primer servicio">
               <Text style={s.emptyBtnText}>Añadir primer servicio</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         ) : visibleSubs.length === 0 ? (
           <View style={s.filterEmpty}>
@@ -271,11 +278,13 @@ export default function ServiciosScreen() {
                   const bank  = sub.bank_id ? banks.find(b => b.id === sub.bank_id) : null;
                   const house = sub.house_id ? houses.find(h => h.id === sub.house_id) : null;
                   return (
-                    <TouchableOpacity
+                    <PressScale
                       key={sub.id}
                       style={[s.subCard, idx === items.length - 1 && s.subCardLast]}
                       onPress={() => openEdit(sub)}
-                      activeOpacity={0.75}
+                      scaleTo={0.99}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Editar ${sub.name}`}
                     >
                       <View style={{ flex: 1 }}>
                         <Text style={s.subName}>{sub.name}</Text>
@@ -303,7 +312,7 @@ export default function ServiciosScreen() {
                         <Text style={s.subAmount}>{sub.amount.toFixed(2).replace('.', ',')} €</Text>
                         <Text style={s.subCycle}>{cycle.short}</Text>
                       </View>
-                    </TouchableOpacity>
+                    </PressScale>
                   );
                 })}
               </View>
@@ -340,9 +349,9 @@ const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title:   { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' },
-  utilBtn: { borderRadius: R.pill, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.ink },
-  utilBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'flex-end' },
+  iconBtn: { width: 40, height: 40, borderRadius: R.pill, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  iconBtnGlyph: { fontSize: 17 },
   addBtn:  { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
 

@@ -116,7 +116,8 @@ export interface VacationPeriod {
   created_at: string;
 }
 
-export type TripItemKind = 'ver' | 'comer' | 'dormir';
+// Franjas del día de un viaje. 'dormir' admite varias noches consecutivas.
+export type TripItemKind = 'manana' | 'comida' | 'tarde' | 'cena' | 'dormir';
 
 export interface TripItem {
   id: string;
@@ -125,8 +126,8 @@ export interface TripItem {
   day: string;        // YYYY-MM-DD
   kind: TripItemKind;
   title: string;
-  url: string | null;     // link de Google Maps
-  place: string | null;   // nombre del sitio extraído del link
+  url: string | null;     // enlace opcional (cualquier URL)
+  place: string | null;   // nombre del sitio si se pudo extraer del enlace
   price: number | null;   // precio opcional del sitio
   sort: number;
   created_by: string | null;
