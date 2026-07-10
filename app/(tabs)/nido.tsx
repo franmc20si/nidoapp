@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { View, Text, ScrollView, StyleSheet, Platform, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -252,7 +252,7 @@ export default function NidoScreen() {
           </View>
         </View>
 
-        {/* Status filter pills */}
+        {/* Status filter pills + acceso a Recurrentes */}
         <View style={s.statusRow}>
           {(['pendiente', 'realizada', 'todas'] as const).map((k) => (
             <PressScale
@@ -268,6 +268,16 @@ export default function NidoScreen() {
               </Text>
             </PressScale>
           ))}
+          <View style={{ flex: 1 }} />
+          <PressScale
+            style={s.recurBtn}
+            onPress={() => router.push('/recurrentes')}
+            scaleTo={0.94}
+            accessibilityRole="button"
+            accessibilityLabel="Ver tareas recurrentes por semana"
+          >
+            <Text style={s.recurBtnText}>🔁 Recurrentes</Text>
+          </PressScale>
         </View>
 
         {/* Alert cards — shared with Hoy */}
@@ -343,9 +353,11 @@ const s = StyleSheet.create({
   meterBarMini: { flexDirection: 'row', height: 22, borderRadius: R.s, overflow: 'hidden', backgroundColor: C.paperDeep, gap: 2 },
   meterSegTextMini: { fontSize: 11, fontWeight: '600', color: C.white, fontFamily: FONT },
 
-  statusRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
   statusPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
   statusText: { fontSize: 13, fontWeight: '500', color: C.ink2, fontFamily: FONT },
+  recurBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: R.pill, backgroundColor: C.cristalesTint, borderWidth: 1.5, borderColor: C.cristales + '55' },
+  recurBtnText: { fontSize: 13, fontWeight: '600', color: C.cristales, fontFamily: FONT },
 
   list: { paddingHorizontal: 20, marginTop: 2 },
   empty: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },

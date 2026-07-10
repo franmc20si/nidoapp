@@ -90,6 +90,7 @@ export default function RootLayout() {
         <Stack.Screen name="bancos" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="casas" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viajes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+        <Stack.Screen name="recurrentes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viaje/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       </Stack>
     </View>
