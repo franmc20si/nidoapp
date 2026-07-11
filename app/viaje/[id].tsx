@@ -218,47 +218,6 @@ function ItemSheet({
           textAlignVertical="top"
         />
 
-        {/* Franja + día: sirven para colocar (add) y para mover (edit). */}
-        <Text style={a.selLabel}>Franja</Text>
-        <View style={a.selRow}>
-          {KINDS.map((k) => {
-            const on = k.key === selKind;
-            return (
-              <PressScale
-                key={k.key}
-                style={[a.selChip, on && { backgroundColor: color, borderColor: color }]}
-                onPress={() => setSelKind(k.key)}
-                scaleTo={0.94}
-              >
-                <Text style={[a.selChipTxt, on && a.selChipTxtOn]}>{k.emoji} {k.label}</Text>
-              </PressScale>
-            );
-          })}
-        </View>
-
-        {days.length > 1 && (
-          <>
-            <Text style={a.selLabel}>Día</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={a.dayMiniRow}>
-              {days.map((iso, i) => {
-                const { dow, num } = dayChipLabel(iso);
-                const on = iso === selDay;
-                return (
-                  <PressScale
-                    key={iso}
-                    style={[a.dayMini, on && { backgroundColor: color, borderColor: color }]}
-                    onPress={() => setSelDay(iso)}
-                    scaleTo={0.94}
-                  >
-                    <Text style={[a.dayMiniTop, on && a.selChipTxtOn]}>Día {i + 1}</Text>
-                    <Text style={[a.dayMiniDow, on && a.selChipTxtOn]}>{dow} {num}</Text>
-                  </PressScale>
-                );
-              })}
-            </ScrollView>
-          </>
-        )}
-
         {showNights && (
           <View style={a.nightsRow}>
             <View style={{ flex: 1 }}>
@@ -780,15 +739,6 @@ const a = StyleSheet.create({
   notesField: { minHeight: 76, paddingTop: 14 },
   openLink: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: C.brandWash, marginTop: -4, marginBottom: 12 },
   openLinkTxt: { fontSize: 13.5, fontFamily: FONT, fontWeight: '600' },
-  selLabel: { fontSize: 13, color: C.ink2, fontFamily: FONT, fontWeight: '600', marginBottom: 8, marginTop: 2 },
-  selRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  selChip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
-  selChipTxt: { fontSize: 13.5, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
-  selChipTxtOn: { color: C.white },
-  dayMiniRow: { gap: 8, paddingBottom: 6, marginBottom: 10 },
-  dayMini: { minWidth: 56, paddingHorizontal: 10, paddingVertical: 8, borderRadius: R.m, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, alignItems: 'center' },
-  dayMiniTop: { fontSize: 10.5, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 1 },
-  dayMiniDow: { fontSize: 13, color: C.ink, fontFamily: FONT, fontWeight: '600' },
   nightsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2, marginBottom: 14 },
   nightsLabel: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
   nightsHint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
