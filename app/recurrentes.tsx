@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TextInput,
-  ActivityIndicator, useWindowDimensions, TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, useWindowDimensions, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router } from 'expo-router';
@@ -11,23 +10,14 @@ import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 import { Task } from '@/types';
 import {
-  WEEKDAYS, TIME_SLOTS, DaySlot, firstWeeklyDue, mondayFirstWeekday, recurrenceLabel,
+  WEEKDAYS, TIME_SLOTS, DaySlot, mondayFirstWeekday, recurrenceLabel,
 } from '@/lib/recurrence';
 import { catFor } from '@/constants/categories';
-import { ptsFromMin } from '@/lib/taskTheme';
-import { readWithRetry, withTimeout } from '@/lib/withTimeout';
+import { readWithRetry } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import PressScale from '@/components/PressScale';
-import BottomSheet from '@/components/BottomSheet';
-import RecurrenceScheduler from '@/components/RecurrenceScheduler';
 import TaskEditSheet from '@/components/TaskEditSheet';
-
-const TIMES = [
-  { label: '15 min', min: 15 },
-  { label: '30 min', min: 30 },
-  { label: '1 h',    min: 60 },
-  { label: '2 h',    min: 120 },
-];
+import AddTaskSheet from '@/components/AddTaskSheet';
 
 // ─── Chip de una tarea recurrente ─────────────────────────────────────────────
 function TaskChip({ task, onPress, compact }: { task: Task; onPress: () => void; compact?: boolean }) {
@@ -44,120 +34,6 @@ function TaskChip({ task, onPress, compact }: { task: Task; onPress: () => void;
       <Text style={ch.txt} numberOfLines={2}>{task.title}</Text>
       {task.recurrence_rule === 'daily' && <Text style={ch.daily}>· diaria</Text>}
     </PressScale>
-  );
-}
-
-// ─── Sheet: nueva recurrente (prerrellena día+franja de la celda tocada) ───────
-function AddRecurringSheet({
-  visible, prefill, color, onClose, onAdded,
-}: {
-  visible: boolean;
-  prefill: { weekday: number; slot: DaySlot } | null;
-  color: string;
-  onClose: () => void;
-  onAdded: () => void;
-}) {
-  const { household, user } = useAuthStore();
-  const [title, setTitle] = useState('');
-  const [min, setMin] = useState(30);
-  const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [slot, setSlot] = useState<DaySlot | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  // Resincroniza el formulario cada vez que se abre con un contexto distinto.
-  const key = visible ? `${prefill?.weekday}_${prefill?.slot}` : 'closed';
-  const [lastKey, setLastKey] = useState('closed');
-  if (visible && key !== lastKey) {
-    setLastKey(key);
-    setTitle(''); setMin(30);
-    setWeekdays(prefill ? [prefill.weekday] : []);
-    setSlot(prefill?.slot ?? null);
-    setError(''); setSaving(false);
-  }
-
-  const toggleDay = (d: number) =>
-    setWeekdays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a, b) => a - b));
-  const pts = ptsFromMin(min);
-
-  const handleSave = async () => {
-    if (!household || !title.trim()) { setError('Ponle un nombre'); return; }
-    if (!weekdays.length) { setError('Elige al menos un día'); return; }
-    setSaving(true); setError('');
-    try {
-      const { error: err } = await withTimeout(
-        supabase.from('tasks').insert({
-          household_id: household.id,
-          title: title.trim(),
-          created_by: user?.id,
-          is_recurring: true,
-          recurrence_rule: 'weekly',
-          weekdays,
-          day_slot: slot,
-          due_date: firstWeeklyDue(weekdays),
-          points: pts,
-          duration_min: min,
-        } as any)
-      );
-      if (err) throw err;
-      useNidoStore.getState().bumpTasks();
-      onAdded();
-      onClose();
-    } catch (e: any) {
-      setError(e?.message === 'TIMEOUT' ? 'La conexión tardó demasiado. Inténtalo de nuevo.' : (e?.message ?? 'No se pudo guardar'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
-        <Text style={a.title}>Nueva recurrente</Text>
-
-        <TextInput
-          style={a.field}
-          placeholder="¿Qué hay que hacer?"
-          placeholderTextColor={C.ink3}
-          value={title}
-          onChangeText={setTitle}
-          autoFocus
-        />
-
-        <Text style={a.label}>Tiempo</Text>
-        <View style={a.timeRow}>
-          {TIMES.map((t) => {
-            const on = min === t.min;
-            return (
-              <PressScale key={t.min} scaleTo={0.94} style={[a.timePill, on && a.timePillOn]} onPress={() => setMin(t.min)}>
-                <Text style={[a.timeText, on && a.timeTextOn]}>{t.label}</Text>
-              </PressScale>
-            );
-          })}
-        </View>
-
-        <RecurrenceScheduler
-          showDays
-          weekdays={weekdays}
-          onToggleDay={toggleDay}
-          slot={slot}
-          onSlot={setSlot}
-          color={color}
-        />
-
-        {error ? <Text style={a.error}>{error}</Text> : null}
-
-        <PressScale
-          style={[a.save, { backgroundColor: color }, (!title.trim() || saving) && { opacity: 0.4 }]}
-          onPress={handleSave}
-          disabled={saving || !title.trim()}
-          accessibilityRole="button"
-          accessibilityLabel="Guardar recurrente"
-        >
-          {saving ? <ActivityIndicator color={C.white} /> : <Text style={a.saveText}>Guardar</Text>}
-        </PressScale>
-      </ScrollView>
-    </BottomSheet>
   );
 }
 
@@ -341,12 +217,10 @@ export default function RecurrentesScreen() {
         )}
       </ScrollView>
 
-      <AddRecurringSheet
+      <AddTaskSheet
         visible={addOpen}
-        prefill={addCtx}
-        color={color}
+        prefill={addCtx ? { kind: 'regular', recRule: 'weekly', weekdays: [addCtx.weekday], slot: addCtx.slot } : undefined}
         onClose={() => { setAddOpen(false); setAddCtx(null); }}
-        onAdded={fetchTasks}
       />
 
       <TaskEditSheet
@@ -409,17 +283,3 @@ const ch = StyleSheet.create({
   addTxt: { fontSize: 15, color: C.ink3, fontFamily: FONT, lineHeight: 18 },
 });
 
-const a = StyleSheet.create({
-  body: { paddingHorizontal: 22, paddingBottom: 36 },
-  title: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4, marginBottom: 18 },
-  field: { borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 18, paddingVertical: 15, fontSize: 16, color: C.ink, backgroundColor: C.card, fontFamily: FONT, marginBottom: 20 },
-  label: { fontSize: 12, fontWeight: '600', color: C.ink2, fontFamily: FONT, letterSpacing: 0.2, marginBottom: 10, textTransform: 'uppercase' },
-  timeRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  timePill: { flex: 1, borderWidth: 1.5, borderColor: C.line, borderRadius: R.pill, paddingVertical: 12, alignItems: 'center', backgroundColor: C.card },
-  timePillOn: { backgroundColor: C.ink, borderColor: C.ink },
-  timeText: { fontSize: 14, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-  timeTextOn: { color: C.paper, fontWeight: '600' },
-  error: { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
-  save: { borderRadius: R.pill, paddingVertical: 16, alignItems: 'center' },
-  saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
-});
