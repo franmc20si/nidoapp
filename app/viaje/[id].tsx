@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Platform, Alert, useWindowDimensions,
+  Animated, PanResponder, PanResponderGestureState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -28,6 +29,9 @@ const KINDS: { key: TripItemKind; label: string; emoji: string }[] = [
   { key: 'dormir', label: 'Dormir', emoji: '🛏️' },
 ];
 
+// Punto de agarre del clon flotante bajo el dedo/cursor al arrastrar.
+const CLONE_GRAB = 22;
+
 function pad2(n: number) { return String(n).padStart(2, '0'); }
 function toIso(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 function shortDate(iso: string) { const [, m, d] = iso.split('-').map(Number); return `${d} ${MONTH_SHORT[m - 1]}`; }
@@ -36,6 +40,9 @@ function money(n: number) { return n.toFixed(2).replace('.', ',') + ' €'; }
 function parsePrice(s: string): number | null {
   const v = parseFloat(s.replace(',', '.').replace(/[^0-9.]/g, ''));
   return isNaN(v) ? null : v;
+}
+function priceToInput(n: number | null): string {
+  return n == null ? '' : String(n).replace('.', ',');
 }
 
 function tripDays(start: string, end: string): string[] {
@@ -51,45 +58,63 @@ function dayChipLabel(iso: string) {
   return { dow: WEEKDAYS[d.getDay()], num: d.getDate() };
 }
 
-// ─── Sheet para añadir un sitio ───────────────────────────────────────────────
-function AddItemSheet({
-  visible, kind, day, days, periodId, color, onClose,
+const cellKey = (day: string, kind: TripItemKind) => `${day}|${kind}`;
+
+// ─── Sheet unificado: añadir un sitio nuevo o editar/mover uno existente ───────
+function ItemSheet({
+  visible, mode, item, addKind, addDay, days, periodId, color, openSeq, onClose, onDelete,
 }: {
   visible: boolean;
-  kind: TripItemKind | null;
-  day: string;
-  days: string[];        // todos los días del viaje (para limitar las noches)
+  mode: 'add' | 'edit';
+  item: TripItem | null;       // presente en modo edit
+  addKind: TripItemKind;       // contexto en modo add
+  addDay: string;
+  days: string[];              // todos los días del viaje
   periodId: string;
   color: string;
+  openSeq: number;             // sube en cada apertura → dispara el reset del formulario
   onClose: () => void;
+  onDelete: (id: string, title: string) => void;
 }) {
   const { household, user } = useAuthStore();
   const { addItems } = useTripStore();
+
+  // Estado del formulario. Se reinicia SIEMPRE que se abre (openSeq cambia), lo
+  // que arregla el bug de "aparece el último sitio" al añadir el 2º/3er ítem.
+  const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [price, setPrice] = useState('');
+  const [notes, setNotes] = useState('');
+  const [selKind, setSelKind] = useState<TripItemKind>('manana');
+  const [selDay, setSelDay] = useState('');
   const [nights, setNights] = useState('1');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Resetea el formulario cada vez que se abre con un contexto distinto.
-  const key = visible ? `${kind}_${day}` : 'closed';
-  const [lastKey, setLastKey] = useState('closed');
-  if (visible && key !== lastKey) {
-    setLastKey(key);
-    setTitle(''); setUrl(''); setPrice(''); setNights('1'); setError(''); setSaving(false);
-  }
+  useEffect(() => {
+    if (mode === 'edit' && item) {
+      setFormMode('edit'); setEditId(item.id);
+      setTitle(item.title); setUrl(item.url ?? ''); setPrice(priceToInput(item.price));
+      setNotes(item.notes ?? ''); setSelKind(item.kind); setSelDay(item.day);
+    } else {
+      setFormMode('add'); setEditId(null);
+      setTitle(''); setUrl(''); setPrice(''); setNotes(''); setSelKind(addKind); setSelDay(addDay);
+    }
+    setNights('1'); setError(''); setSaving(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSeq]);
 
-  if (!kind) return null;
-  const kindMeta = KINDS.find((k) => k.key === kind)!;
-  const isLodging = kind === 'dormir';
+  const isLodging = selKind === 'dormir';
+  const kindMeta = KINDS.find((k) => k.key === selKind)!;
 
-  // Noches posibles desde el día elegido hasta el final del viaje (no se pueden
-  // crear entradas fuera del rango del viaje).
-  const startIdx = days.indexOf(day);
+  // Noches posibles desde el día elegido hasta el final del viaje (solo add+dormir).
+  const startIdx = days.indexOf(selDay);
   const maxNights = startIdx >= 0 ? days.length - startIdx : 1;
   const nightsNum = Math.min(Math.max(parseInt(nights, 10) || 1, 1), Math.max(maxNights, 1));
-  const coveredDays = startIdx >= 0 ? days.slice(startIdx, startIdx + nightsNum) : [day];
+  const coveredDays = startIdx >= 0 ? days.slice(startIdx, startIdx + nightsNum) : [selDay];
+  const showNights = formMode === 'add' && isLodging;
   const decNights = () => setNights(String(Math.max(nightsNum - 1, 1)));
   const incNights = () => setNights(String(Math.min(nightsNum + 1, maxNights)));
 
@@ -102,23 +127,37 @@ function AddItemSheet({
     }
   };
 
+  const canOpenLink = url.trim() !== '' && looksLikeUrl(url.trim());
+
   const handleSave = async () => {
     if (!household) return;
-    const clean = url.trim();
-    if (!title.trim() && !clean) { setError('Añade un nombre o un enlace'); return; }
-    if (clean && !looksLikeUrl(clean)) { setError('El enlace no parece válido'); return; }
+    const cleanTitle = title.trim();
+    const cleanUrl = url.trim();
+    if (!cleanTitle && !cleanUrl) { setError('Añade un nombre o un enlace'); return; }
+    if (cleanUrl && !looksLikeUrl(cleanUrl)) { setError('El enlace no parece válido'); return; }
     setSaving(true); setError('');
-    const place = clean ? extractPlaceName(clean) : null;
+    const place = cleanUrl ? extractPlaceName(cleanUrl) : null;
     const base = {
-      kind,
-      title: title.trim() || place || 'Sitio',
-      url: clean || null,
+      kind: selKind,
+      title: cleanTitle || place || 'Sitio',
+      url: cleanUrl || null,
       place,
       price: parsePrice(price),
+      notes: notes.trim() || null,
     };
-    // En "dormir" se pueden crear varias noches consecutivas (un item por día).
+
+    if (formMode === 'edit' && editId) {
+      // Editar (y, si cambió franja/día, mover el sitio).
+      const res = await useTripStore.getState().updateItem(periodId, editId, { ...base, day: selDay });
+      setSaving(false);
+      if (!res.ok) { setError(res.error ?? 'No se pudo guardar'); return; }
+      onClose();
+      return;
+    }
+
+    // Añadir. En "dormir" se pueden crear varias noches consecutivas (un item por día).
     const n = isLodging ? Math.min(Math.max(parseInt(nights, 10) || 1, 1), maxNights) : 1;
-    const targetDays = startIdx >= 0 ? days.slice(startIdx, startIdx + n) : [day];
+    const targetDays = startIdx >= 0 ? days.slice(startIdx, startIdx + n) : [selDay];
     const inputs: TripItemInput[] = targetDays.map((d) => ({ ...base, day: d }));
     const res = await addItems(household.id, user?.id, periodId, inputs);
     setSaving(false);
@@ -127,10 +166,16 @@ function AddItemSheet({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled">
-        <Text style={a.eyebrow}>{kindMeta.emoji} {kindMeta.label.toUpperCase()} · {shortDate(day)}</Text>
-        <Text style={a.title}>{isLodging ? 'Añadir alojamiento' : 'Añadir sitio'}</Text>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '92%' }}>
+      <ScrollView contentContainerStyle={a.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {formMode === 'edit' ? (
+          <Text style={a.eyebrow}>EDITAR SITIO</Text>
+        ) : (
+          <Text style={a.eyebrow}>{kindMeta.emoji} {kindMeta.label.toUpperCase()} · {shortDate(selDay)}</Text>
+        )}
+        <Text style={a.title}>
+          {formMode === 'edit' ? 'Editar sitio' : (isLodging ? 'Añadir alojamiento' : 'Añadir sitio')}
+        </Text>
 
         <TextInput
           style={a.field}
@@ -149,6 +194,11 @@ function AddItemSheet({
           autoCorrect={false}
           keyboardType="url"
         />
+        {canOpenLink && (
+          <PressScale style={a.openLink} onPress={() => openLink(url.trim())} scaleTo={0.96}>
+            <Text style={[a.openLinkTxt, { color }]}>Abrir enlace ↗</Text>
+          </PressScale>
+        )}
         <TextInput
           style={a.field}
           placeholder={isLodging ? 'Precio por noche (opcional)' : 'Precio (opcional, ej. 12,50)'}
@@ -158,8 +208,58 @@ function AddItemSheet({
           keyboardType="decimal-pad"
           inputMode="decimal"
         />
+        <TextInput
+          style={[a.field, a.notesField]}
+          placeholder="Notas (horarios, reserva, comentarios…)"
+          placeholderTextColor={C.ink3}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          textAlignVertical="top"
+        />
 
-        {isLodging && (
+        {/* Franja + día: sirven para colocar (add) y para mover (edit). */}
+        <Text style={a.selLabel}>Franja</Text>
+        <View style={a.selRow}>
+          {KINDS.map((k) => {
+            const on = k.key === selKind;
+            return (
+              <PressScale
+                key={k.key}
+                style={[a.selChip, on && { backgroundColor: color, borderColor: color }]}
+                onPress={() => setSelKind(k.key)}
+                scaleTo={0.94}
+              >
+                <Text style={[a.selChipTxt, on && a.selChipTxtOn]}>{k.emoji} {k.label}</Text>
+              </PressScale>
+            );
+          })}
+        </View>
+
+        {days.length > 1 && (
+          <>
+            <Text style={a.selLabel}>Día</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={a.dayMiniRow}>
+              {days.map((iso, i) => {
+                const { dow, num } = dayChipLabel(iso);
+                const on = iso === selDay;
+                return (
+                  <PressScale
+                    key={iso}
+                    style={[a.dayMini, on && { backgroundColor: color, borderColor: color }]}
+                    onPress={() => setSelDay(iso)}
+                    scaleTo={0.94}
+                  >
+                    <Text style={[a.dayMiniTop, on && a.selChipTxtOn]}>Día {i + 1}</Text>
+                    <Text style={[a.dayMiniDow, on && a.selChipTxtOn]}>{dow} {num}</Text>
+                  </PressScale>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
+
+        {showNights && (
           <View style={a.nightsRow}>
             <View style={{ flex: 1 }}>
               <Text style={a.nightsLabel}>Noches</Text>
@@ -179,38 +279,86 @@ function AddItemSheet({
           </View>
         )}
 
-        <Text style={a.hint}>
-          {isLodging
-            ? 'Si te quedas varias noches en el mismo sitio, sube las noches y se añadirá a cada día automáticamente. El precio es por noche.'
-            : 'Puedes pegar cualquier enlace (Google Maps, una web, una reserva…). Al tocar el sitio se abrirá el enlace.'}
-        </Text>
+        {formMode === 'add' && (
+          <Text style={a.hint}>
+            {isLodging
+              ? 'Si te quedas varias noches en el mismo sitio, sube las noches y se añadirá a cada día automáticamente. El precio es por noche.'
+              : 'Puedes pegar cualquier enlace (Google Maps, una web, una reserva…).'}
+          </Text>
+        )}
 
         {error ? <Text style={a.error}>{error}</Text> : null}
 
         <PressScale style={[a.save, { backgroundColor: color }]} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color={C.white} /> : <Text style={a.saveText}>Guardar</Text>}
+          {saving ? <ActivityIndicator color={C.white} /> : <Text style={a.saveText}>{formMode === 'edit' ? 'Guardar cambios' : 'Guardar'}</Text>}
         </PressScale>
+
+        {formMode === 'edit' && editId && (
+          <TouchableOpacity style={a.deleteBtn} onPress={() => onDelete(editId, title.trim() || 'este sitio')} activeOpacity={0.7}>
+            <Text style={a.deleteTxt}>Eliminar sitio</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </BottomSheet>
   );
 }
 
+// Handlers de arrastre que el padre inyecta en las tarjetas (solo escritorio).
+interface DragApi {
+  onStart: (item: TripItem, g: PanResponderGestureState) => void;
+  onMove: (g: PanResponderGestureState) => void;
+  onEnd: (g: PanResponderGestureState) => void;
+}
+
 // ─── Tarjeta de un sitio ──────────────────────────────────────────────────────
-function ItemCard({ item, color, onDelete, compact }: { item: TripItem; color: string; onDelete: () => void; compact?: boolean }) {
+function ItemCard({
+  item, color, onPress, onDelete, compact, drag, dragging,
+}: {
+  item: TripItem;
+  color: string;
+  onPress: () => void;
+  onDelete: () => void;
+  compact?: boolean;
+  drag?: DragApi;        // presente → la tarjeta es arrastrable
+  dragging?: boolean;    // es la tarjeta que se está arrastrando ahora mismo
+}) {
   const hasUrl = !!item.url;
   const sub = hasUrl ? (item.place ?? linkLabel(item.url!)) : null;
+  const hasNotes = !!(item.notes && item.notes.trim());
+
+  // PanResponder creado una sola vez; lee item/drag "vivos" vía ref.
+  const latest = useRef({ item, drag });
+  latest.current = { item, drag };
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_e, g) =>
+        !!latest.current.drag && Math.hypot(g.dx, g.dy) > 8,
+      onPanResponderGrant: (_e, g) => latest.current.drag?.onStart(latest.current.item, g),
+      onPanResponderMove: (_e, g) => latest.current.drag?.onMove(g),
+      onPanResponderRelease: (_e, g) => latest.current.drag?.onEnd(g),
+      onPanResponderTerminate: (_e, g) => latest.current.drag?.onEnd(g),
+      onPanResponderTerminationRequest: () => false,
+    })
+  ).current;
+  const panHandlers = drag ? pan.panHandlers : {};
+
   return (
-    <View style={c.card}>
-      <PressScale
-        style={[c.tap, compact && c.tapC]}
-        onPress={() => item.url && openLink(item.url)}
-        disabled={!hasUrl}
-      >
+    <View style={[c.card, dragging && c.cardDragging]} {...panHandlers}>
+      <PressScale style={[c.tap, compact && c.tapC]} onPress={onPress}>
         <View style={{ flex: 1 }}>
           <Text style={[c.name, compact && c.nameC]} numberOfLines={compact ? 3 : 2}>{item.title}</Text>
-          {compact
-            ? (item.price != null && <Text style={[c.priceC, { color }]}>{money(item.price)}</Text>)
-            : (sub && <Text style={c.sub} numberOfLines={1}>{sub} ↗</Text>)}
+          {compact ? (
+            <View style={c.metaC}>
+              {item.price != null && <Text style={[c.priceC, { color }]}>{money(item.price)}</Text>}
+              {hasNotes && <Text style={c.noteMark}>📝</Text>}
+            </View>
+          ) : (
+            <>
+              {sub && <Text style={c.sub} numberOfLines={1}>{sub} ↗</Text>}
+              {hasNotes && <Text style={c.note} numberOfLines={1}>📝 {item.notes!.trim()}</Text>}
+            </>
+          )}
         </View>
         {!compact && item.price != null && <Text style={[c.price, { color }]}>{money(item.price)}</Text>}
       </PressScale>
@@ -238,9 +386,13 @@ export default function TripDetailScreen() {
     ? selectedDay
     : (days.includes(toIso(new Date())) ? toIso(new Date()) : days[0] ?? null);
 
-  const [addKind, setAddKind] = useState<TripItemKind | null>(null);
-  const [addDay, setAddDay] = useState<string>('');
+  // Sheet (añadir/editar)
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetMode, setSheetMode] = useState<'add' | 'edit'>('add');
+  const [addKind, setAddKind] = useState<TripItemKind>('manana');
+  const [addDay, setAddDay] = useState<string>('');
+  const [editItem, setEditItem] = useState<TripItem | null>(null);
+  const [openSeq, setOpenSeq] = useState(0);
   const [page, setPage] = useState(0);
 
   // En escritorio mostramos los días en columnas paralelas (hasta 7 a la vez),
@@ -257,6 +409,70 @@ export default function TripDetailScreen() {
   const safePage = Math.min(page, totalPages - 1);
   const pageDays = isWide ? days.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE) : [];
 
+  // ── Arrastrar y soltar (solo escritorio) ────────────────────────────────────
+  const [dragItem, setDragItem] = useState<TripItem | null>(null);
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const dragPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const cellRefs = useRef<Map<string, View | null>>(new Map());
+  const zonesRef = useRef<Array<{ key: string; x: number; y: number; w: number; h: number }>>([]);
+  const dragItemRef = useRef<TripItem | null>(null);
+  const hoverRef = useRef<string | null>(null);
+
+  const registerCell = (key: string) => (ref: View | null) => {
+    if (ref) cellRefs.current.set(key, ref); else cellRefs.current.delete(key);
+  };
+
+  // Medimos las celdas al empezar el arrastre (la posición absoluta cambia con el
+  // scroll; durante el drag el scroll está bloqueado, así que la medida vale).
+  const measureZones = () => {
+    const zones: typeof zonesRef.current = [];
+    cellRefs.current.forEach((ref, key) => {
+      ref?.measureInWindow((x, y, w, h) => { zones.push({ key, x, y, w, h }); });
+    });
+    zonesRef.current = zones;
+  };
+  // measureInWindow (web) devuelve coords de viewport; el PanResponder da coords
+  // de página. Normalmente el documento no hace scroll (lo hace el ScrollView
+  // interno) y coinciden; restamos el scroll del documento por si acaso.
+  const scrollOff = () => (Platform.OS === 'web' && typeof window !== 'undefined')
+    ? { x: window.scrollX || 0, y: window.scrollY || 0 } : { x: 0, y: 0 };
+
+  const hitTest = (px: number, py: number): string | null => {
+    for (const z of zonesRef.current) {
+      if (px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) return z.key;
+    }
+    return null;
+  };
+
+  const dragApi: DragApi = {
+    onStart: (item, g) => {
+      dragItemRef.current = item;
+      setDragItem(item);
+      measureZones();
+      const o = scrollOff();
+      dragPos.setValue({ x: g.moveX - o.x - CLONE_GRAB, y: g.moveY - o.y - CLONE_GRAB });
+    },
+    onMove: (g) => {
+      const o = scrollOff();
+      dragPos.setValue({ x: g.moveX - o.x - CLONE_GRAB, y: g.moveY - o.y - CLONE_GRAB });
+      const k = hitTest(g.moveX - o.x, g.moveY - o.y);
+      if (k !== hoverRef.current) { hoverRef.current = k; setHoverKey(k); }
+    },
+    onEnd: (g) => {
+      const o = scrollOff();
+      const k = hitTest(g.moveX - o.x, g.moveY - o.y);
+      const it = dragItemRef.current;
+      if (it && k) {
+        const [day, kind] = k.split('|') as [string, TripItemKind];
+        if (day !== it.day || kind !== it.kind) {
+          useTripStore.getState().updateItem(periodId, it.id, { day, kind });
+        }
+      }
+      dragItemRef.current = null; hoverRef.current = null;
+      setDragItem(null); setHoverKey(null);
+    },
+  };
+
   const fetchAll = useCallback(async () => {
     if (!household) return;
     if (!periodsLoaded) await loadPeriods(household.id);
@@ -270,14 +486,40 @@ export default function TripDetailScreen() {
   // Total del viaje entero (todos los días y categorías), siempre visible al pie.
   const tripTotal = items.reduce((acc, it) => acc + (it.price ?? 0), 0);
 
-  const openAdd = (kind: TripItemKind, day: string) => { setAddKind(kind); setAddDay(day); setSheetOpen(true); };
+  const openAdd = (kind: TripItemKind, day: string) => {
+    setSheetMode('add'); setAddKind(kind); setAddDay(day); setEditItem(null);
+    setOpenSeq((n) => n + 1); setSheetOpen(true);
+  };
+  const openEdit = (item: TripItem) => {
+    setSheetMode('edit'); setEditItem(item);
+    setOpenSeq((n) => n + 1); setSheetOpen(true);
+  };
 
-  // Renderiza las 3 secciones (Ver/Comer/Dormir) de un día. `compact` para las
-  // columnas estrechas de escritorio.
+  const confirmDelete = (id: string, title: string) => {
+    const doDelete = () => { useTripStore.getState().deleteItem(periodId, id); setSheetOpen(false); };
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined' || window.confirm(`¿Eliminar “${title}”?`)) doDelete();
+      return;
+    }
+    Alert.alert('Eliminar sitio', `¿Eliminar “${title}”?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: doDelete },
+    ]);
+  };
+
+  // Renderiza las 5 secciones (franjas) de un día. `compact` para las columnas
+  // estrechas de escritorio, donde además las celdas son zonas de arrastre.
   const renderSections = (day: string, compact: boolean) => KINDS.map((k) => {
     const list = items.filter((it) => it.day === day && it.kind === k.key);
+    const key = cellKey(day, k.key);
+    const isDropTarget = compact && !!dragItem && hoverKey === key
+      && !(dragItem.day === day && dragItem.kind === k.key);
     return (
-      <View key={k.key} style={compact ? s.sectionC : s.section}>
+      <View
+        key={k.key}
+        ref={compact ? registerCell(key) : undefined}
+        style={[compact ? s.sectionC : s.section, isDropTarget && { ...s.sectionDrop, borderColor: color }]}
+      >
         <View style={s.sectionHead}>
           <Text style={[s.sectionTitle, compact && s.sectionTitleC]}>{k.emoji} {k.label}</Text>
           <PressScale style={s.addChip} onPress={() => openAdd(k.key, day)} scaleTo={0.94}>
@@ -285,29 +527,26 @@ export default function TripDetailScreen() {
           </PressScale>
         </View>
         {list.length === 0 ? (
-          <Text style={s.sectionEmpty}>{compact ? '—' : 'Nada planeado todavía'}</Text>
+          <Text style={[s.sectionEmpty, compact && s.sectionEmptyC]}>{compact ? '—' : 'Nada planeado todavía'}</Text>
         ) : (
           <View style={{ gap: 8 }}>
             {list.map((it) => (
-              <ItemCard key={it.id} item={it} color={color} onDelete={() => confirmDelete(it)} compact={compact} />
+              <ItemCard
+                key={it.id}
+                item={it}
+                color={color}
+                compact={compact}
+                onPress={() => openEdit(it)}
+                onDelete={() => confirmDelete(it.id, it.title)}
+                drag={compact ? dragApi : undefined}
+                dragging={dragItem?.id === it.id}
+              />
             ))}
           </View>
         )}
       </View>
     );
   });
-
-  const confirmDelete = (item: TripItem) => {
-    const doDelete = () => useTripStore.getState().deleteItem(periodId, item.id);
-    if (Platform.OS === 'web') {
-      if (typeof window === 'undefined' || window.confirm(`¿Eliminar “${item.title}”?`)) doDelete();
-      return;
-    }
-    Alert.alert('Eliminar sitio', `¿Eliminar “${item.title}”?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: doDelete },
-    ]);
-  };
 
   // Estados de carga
   if (periodsLoaded && !period) {
@@ -332,7 +571,13 @@ export default function TripDetailScreen() {
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} alwaysBounceVertical={false} contentContainerStyle={{ paddingBottom: 28 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={false}
+        contentContainerStyle={{ paddingBottom: 28 }}
+        scrollEnabled={!dragItem}
+      >
         {/* Cabecera */}
         <View style={s.topbar}>
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7} hitSlop={8}>
@@ -369,6 +614,7 @@ export default function TripDetailScreen() {
                 </TouchableOpacity>
               </View>
             )}
+            <Text style={s.dragHint}>Arrastra un sitio a otra franja o día para moverlo · toca para editarlo</Text>
             <View style={s.daysRow}>
               {pageDays.map((iso) => {
                 const { dow, num } = dayChipLabel(iso);
@@ -412,14 +658,29 @@ export default function TripDetailScreen() {
         <Text style={[s.footerTotal, { color }]}>{money(tripTotal)}</Text>
       </View>
 
-      <AddItemSheet
+      {/* Clon flotante mientras se arrastra (escritorio) */}
+      {dragItem && (
+        <Animated.View
+          pointerEvents="none"
+          style={[dg.clone, { width: colW, borderColor: color, transform: dragPos.getTranslateTransform() }]}
+        >
+          <Text style={dg.cloneName} numberOfLines={2}>{dragItem.title}</Text>
+          {dragItem.price != null && <Text style={[dg.clonePrice, { color }]}>{money(dragItem.price)}</Text>}
+        </Animated.View>
+      )}
+
+      <ItemSheet
         visible={sheetOpen}
-        kind={addKind}
-        day={addDay}
+        mode={sheetMode}
+        item={editItem}
+        addKind={addKind}
+        addDay={addDay}
         days={days}
         periodId={periodId}
         color={color}
-        onClose={() => { setSheetOpen(false); setAddKind(null); }}
+        openSeq={openSeq}
+        onClose={() => setSheetOpen(false)}
+        onDelete={confirmDelete}
       />
     </SafeAreaView>
   );
@@ -442,13 +703,15 @@ const s = StyleSheet.create({
   dayChipTextOn: { color: C.white },
 
   section: { paddingHorizontal: 20, marginTop: 18 },
-  sectionC: { marginTop: 14 },
+  sectionC: { marginTop: 14, borderWidth: 1.5, borderColor: 'transparent', borderRadius: R.m, paddingHorizontal: 6, paddingVertical: 4, marginHorizontal: -6 },
+  sectionDrop: { borderStyle: 'dashed', backgroundColor: C.brandWash },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 17, color: C.ink, fontFamily: FONT, fontWeight: '600', letterSpacing: -0.2 },
   sectionTitleC: { fontSize: 15 },
   addChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: R.pill, backgroundColor: C.brandWash },
   addChipText: { fontSize: 13, fontFamily: FONT, fontWeight: '600' },
   sectionEmpty: { fontSize: 13.5, color: C.ink3, fontFamily: FONT, fontStyle: 'italic', paddingVertical: 4 },
+  sectionEmptyC: { paddingVertical: 8, textAlign: 'center' },
 
   // Escritorio: días en columnas
   desktop: { paddingHorizontal: 20, marginTop: 6 },
@@ -456,6 +719,7 @@ const s = StyleSheet.create({
   pagerBtn: { width: 32, height: 32, borderRadius: R.pill, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   pagerBtnOff: { opacity: 0.5 },
   pagerLabel: { fontSize: 13.5, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
+  dragHint: { fontSize: 12, color: C.ink3, fontFamily: FONT, textAlign: 'center', marginBottom: 12 },
   daysRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 },
   dayCol: { backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingBottom: 14 },
   dayColHead: { alignItems: 'center', paddingVertical: 12, borderTopWidth: 3, borderTopLeftRadius: R.l, borderTopRightRadius: R.l, marginHorizontal: -12, marginBottom: 2, borderBottomWidth: 1, borderBottomColor: C.line },
@@ -479,16 +743,33 @@ const s = StyleSheet.create({
 
 const c = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingRight: 6 },
+  cardDragging: { opacity: 0.35 },
   tap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, paddingLeft: 14, paddingRight: 4 },
   tapC: { paddingVertical: 9, paddingLeft: 10, paddingRight: 2 },
   name: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600' },
   nameC: { fontSize: 13, marginBottom: 0 },
   sub: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, marginTop: 2 },
+  note: { fontSize: 12, color: C.ink2, fontFamily: FONT, marginTop: 3 },
+  metaC: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  noteMark: { fontSize: 11 },
   price: { fontSize: 14.5, fontFamily: FONT, fontWeight: '700', marginLeft: 8 },
-  priceC: { fontSize: 12.5, fontFamily: FONT, fontWeight: '700', marginTop: 3 },
+  priceC: { fontSize: 12.5, fontFamily: FONT, fontWeight: '700' },
   del: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   delC: { width: 24, alignSelf: 'flex-start', paddingTop: 6 },
   delText: { fontSize: 15, color: C.ink3, fontFamily: FONT },
+});
+
+// Clon flotante durante el arrastre
+const dg = StyleSheet.create({
+  clone: {
+    position: 'absolute', top: 0, left: 0,
+    backgroundColor: C.card, borderRadius: R.l, borderWidth: 1.5,
+    paddingVertical: 10, paddingHorizontal: 12,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    elevation: 8, zIndex: 100,
+  },
+  cloneName: { fontSize: 13, color: C.ink, fontFamily: FONT, fontWeight: '600' },
+  clonePrice: { fontSize: 12.5, fontFamily: FONT, fontWeight: '700', marginTop: 3 },
 });
 
 const a = StyleSheet.create({
@@ -496,7 +777,18 @@ const a = StyleSheet.create({
   eyebrow: { fontSize: 11, letterSpacing: 1.4, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 6 },
   title: { fontSize: 20, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.4, marginBottom: 18 },
   field: { borderWidth: 1.5, borderColor: C.line, borderRadius: R.l, paddingHorizontal: 18, paddingVertical: 15, fontSize: 16, color: C.ink, backgroundColor: C.card, fontFamily: FONT, marginBottom: 12 },
-  hint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, lineHeight: 18, marginBottom: 18 },
+  notesField: { minHeight: 76, paddingTop: 14 },
+  openLink: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: C.brandWash, marginTop: -4, marginBottom: 12 },
+  openLinkTxt: { fontSize: 13.5, fontFamily: FONT, fontWeight: '600' },
+  selLabel: { fontSize: 13, color: C.ink2, fontFamily: FONT, fontWeight: '600', marginBottom: 8, marginTop: 2 },
+  selRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  selChip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
+  selChipTxt: { fontSize: 13.5, color: C.ink2, fontFamily: FONT, fontWeight: '600' },
+  selChipTxtOn: { color: C.white },
+  dayMiniRow: { gap: 8, paddingBottom: 6, marginBottom: 10 },
+  dayMini: { minWidth: 56, paddingHorizontal: 10, paddingVertical: 8, borderRadius: R.m, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card, alignItems: 'center' },
+  dayMiniTop: { fontSize: 10.5, color: C.ink3, fontFamily: FONT, fontWeight: '600', marginBottom: 1 },
+  dayMiniDow: { fontSize: 13, color: C.ink, fontFamily: FONT, fontWeight: '600' },
   nightsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2, marginBottom: 14 },
   nightsLabel: { fontSize: 15.5, color: C.ink, fontFamily: FONT, fontWeight: '600', marginBottom: 2 },
   nightsHint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
@@ -508,4 +800,7 @@ const a = StyleSheet.create({
   error: { color: C.danger, fontSize: 13, fontFamily: FONT, marginBottom: 12, textAlign: 'center' },
   save: { borderRadius: R.pill, paddingVertical: 16, alignItems: 'center' },
   saveText: { color: C.white, fontWeight: '600', fontSize: 16, fontFamily: FONT },
+  hint: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, lineHeight: 18, marginBottom: 18, marginTop: 2 },
+  deleteBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 6 },
+  deleteTxt: { fontSize: 14.5, color: C.danger, fontFamily: FONT, fontWeight: '600' },
 });

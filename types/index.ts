@@ -131,6 +131,7 @@ export interface TripItem {
   url: string | null;     // enlace opcional (cualquier URL)
   place: string | null;   // nombre del sitio si se pudo extraer del enlace
   price: number | null;   // precio opcional del sitio
+  notes: string | null;   // notas opcionales (horarios, comentarios…)
   sort: number;
   created_by: string | null;
   created_at: string;

@@ -10,6 +10,7 @@ export interface TripItemInput {
   url: string | null;
   place: string | null;
   price: number | null;
+  notes: string | null;
 }
 
 interface TripState {
@@ -77,6 +78,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       url: input.url,
       place: input.place,
       price: input.price,
+      notes: input.notes,
       sort: Date.now() % 1_000_000,
       created_by: userId ?? null,
       created_at: new Date().toISOString(),
@@ -100,6 +102,7 @@ export const useTripStore = create<TripState>((set, get) => ({
           url: input.url,
           place: input.place,
           price: input.price,
+          notes: input.notes,
           sort: item.sort,
           created_by: userId,
         } as any)
@@ -131,6 +134,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       url: input.url,
       place: input.place,
       price: input.price,
+      notes: input.notes,
       sort: base + i,
       created_by: userId ?? null,
       created_at: new Date().toISOString(),
@@ -159,6 +163,7 @@ export const useTripStore = create<TripState>((set, get) => ({
             url: it.url,
             place: it.place,
             price: it.price,
+            notes: it.notes,
             sort: it.sort,
             created_by: userId,
           })) as any
