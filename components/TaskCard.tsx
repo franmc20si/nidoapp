@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Animated, View, Text, Pressable, Easing, StyleSheet } from 'react-native';
+import { Animated, View, Text, Pressable, Easing, StyleSheet, PanResponder, Dimensions } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { catFor } from '@/constants/categories';
 import { taskTheme, fmtDur } from '@/lib/taskTheme';
@@ -9,6 +9,10 @@ import { Task } from '@/types';
 
 // Strong ease-out (Emil): starts fast, feels responsive on exit.
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+
+const SCREEN_W = Dimensions.get('window').width;
+// Distancia mínima (px) de arrastre a la izquierda para eliminar al soltar.
+const SWIPE_THRESHOLD = 84;
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -23,10 +27,11 @@ interface Props {
   onToggle: (task: Task) => void;
   onAnimatedOut?: (task: Task) => void;
   onPress?: (task: Task) => void;
+  onDelete?: (task: Task) => void;
   completerName?: string | null;
 }
 
-export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, completerName }: Props) {
+export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onDelete, completerName }: Props) {
   const cat = catFor(task.category);
   const pts: number = task.points ?? 10;
   const min: number = task.duration_min ?? pts * 5;
@@ -44,6 +49,28 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
   const spring = (val: Animated.Value, toValue: number) =>
     Animated.spring(val, { toValue, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
 
+  // Swipe a la izquierda para eliminar. Refs "latest" para no capturar props
+  // viejos en el PanResponder (creado una sola vez con useRef).
+  const latest = useRef({ task, onDelete });
+  latest.current = { task, onDelete };
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dx < -6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => translateX.setValue(Math.min(0, g.dx)),
+      onPanResponderRelease: (_, g) => {
+        const { task: t, onDelete: del } = latest.current;
+        if (del && (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5)) {
+          Animated.parallel([
+            Animated.timing(translateX, { toValue: -SCREEN_W, duration: 220, easing: EASE_OUT, useNativeDriver: true }),
+            Animated.timing(opacity,    { toValue: 0,         duration: 200, easing: EASE_OUT, useNativeDriver: true }),
+          ]).start(() => del(t));
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
+        }
+      },
+    })
+  ).current;
+
   const handlePress = () => {
     // toggling to done → animate out, then notify parent to remove
     if (!task.is_done && onAnimatedOut) {
@@ -59,13 +86,19 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
   };
 
   return (
-    <Animated.View
-      style={[
-        s.card,
-        { backgroundColor: th.bg, borderColor: th.border, transform: [{ translateX }, { scale: cardScale }], opacity },
-        task.is_done && s.done,
-      ]}
-    >
+    <View style={s.wrap}>
+      <View style={s.deleteBg} pointerEvents="none">
+        <Text style={s.deleteText}>Eliminar</Text>
+        <Text style={s.deleteEmoji}>🗑️</Text>
+      </View>
+      <Animated.View
+        {...(onDelete ? pan.panHandlers : {})}
+        style={[
+          s.card,
+          { backgroundColor: th.bg, borderColor: th.border, transform: [{ translateX }, { scale: cardScale }], opacity },
+          task.is_done && s.done,
+        ]}
+      >
       <Pressable
         style={s.row}
         onPress={() => onPress?.(task)}
@@ -112,12 +145,22 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, compl
           </Animated.View>
         </Pressable>
       </Pressable>
-    </Animated.View>
+      </Animated.View>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  card: { borderRadius: R.l, padding: 16, marginBottom: 10, borderWidth: 1 },
+  wrap: { marginBottom: 10, borderRadius: R.l },
+  deleteBg: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: C.danger, borderRadius: R.l,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    paddingHorizontal: 22, gap: 8,
+  },
+  deleteText: { color: C.white, fontWeight: '700', fontFamily: FONT, fontSize: 14 },
+  deleteEmoji: { fontSize: 18 },
+  card: { borderRadius: R.l, padding: 16, borderWidth: 1 },
   done: { opacity: 0.58 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   icon: { width: 40, height: 40, borderRadius: R.s, alignItems: 'center', justifyContent: 'center' },

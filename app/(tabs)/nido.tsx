@@ -126,6 +126,19 @@ export default function NidoScreen() {
     }
   };
 
+  // Swipe-a-izquierda en la tarjeta → eliminar, con deshacer (reinserta la fila).
+  const deleteTask = (task: Task) => {
+    const restore = () => setTasks(prev => prev.some(t => t.id === task.id) ? prev : [...prev, task]);
+    setTasks(prev => prev.filter(t => t.id !== task.id));
+    withTimeout(supabase.from('tasks').delete().eq('id', task.id))
+      .then((res: any) => { if (res?.error) { restore(); showToast('No se pudo eliminar la tarea', 'error'); } })
+      .catch(() => { restore(); showToast('No se pudo eliminar la tarea', 'error'); });
+    showToast('Tarea eliminada', 'success', { label: 'Deshacer', onPress: () => {
+      restore();
+      supabase.from('tasks').insert(task as any).then(() => {});
+    }});
+  };
+
   const shown = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
               : statusFilter === 'realizada'
                 // Histórico: de la más recientemente hecha a la más antigua
@@ -298,6 +311,7 @@ export default function NidoScreen() {
                 task={task}
                 onToggle={toggleTask}
                 onPress={setEditingTask}
+                onDelete={deleteTask}
                 completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
               />
             </StaggerItem>
