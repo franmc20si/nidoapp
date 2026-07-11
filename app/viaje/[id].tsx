@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Platform, Alert, useWindowDimensions,
-  Animated, PanResponder, PanResponderGestureState,
+  Animated, PanResponder, PanResponderGestureState, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, router, useLocalSearchParams } from 'expo-router';
@@ -31,6 +31,10 @@ const KINDS: { key: TripItemKind; label: string; emoji: string }[] = [
 
 // Punto de agarre del clon flotante bajo el dedo/cursor al arrastrar.
 const CLONE_GRAB = 22;
+// Salida suave (ease-out fuerte) — Emil: la salida siempre decidida y corta.
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+// En web, promocionar el clon a su propia capa de composición = arrastre fluido.
+const cloneHint = Platform.select({ web: { willChange: 'transform' }, default: {} }) as any;
 
 function pad2(n: number) { return String(n).padStart(2, '0'); }
 function toIso(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
@@ -270,8 +274,12 @@ interface DragApi {
 }
 
 // ─── Tarjeta de un sitio ──────────────────────────────────────────────────────
-function ItemCard({
-  item, color, onPress, onDelete, compact, drag, dragging,
+// Memoizada: durante el arrastre solo cambia el resalte de la celda destino, así
+// que las tarjetas NO deben re-renderizarse (evita el lag del clon). Los callbacks
+// (onPress/drag) cierran sobre refs/setState estables, así que ignorar su identidad
+// en la comparación es seguro aunque se salte el render.
+const ItemCard = memo(function ItemCard({
+  item, color, onPress, onDelete, compact, drag, dragging, justMoved,
 }: {
   item: TripItem;
   color: string;
@@ -280,31 +288,59 @@ function ItemCard({
   compact?: boolean;
   drag?: DragApi;        // presente → la tarjeta es arrastrable
   dragging?: boolean;    // es la tarjeta que se está arrastrando ahora mismo
+  justMoved?: boolean;   // acaba de aterrizar aquí tras soltarla → entra animada
 }) {
   const hasUrl = !!item.url;
   const sub = hasUrl ? (item.place ?? linkLabel(item.url!)) : null;
   const hasNotes = !!(item.notes && item.notes.trim());
 
+  // Entrada al aterrizar en la columna destino: fade + subida + escala.
+  const enter = useRef(new Animated.Value(justMoved ? 0 : 1)).current;
+  useEffect(() => {
+    if (!justMoved) return;
+    enter.setValue(0);
+    Animated.timing(enter, { toValue: 1, duration: 280, easing: EASE_OUT, useNativeDriver: false }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const enterStyle = justMoved
+    ? {
+        opacity: enter,
+        transform: [
+          { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) },
+        ],
+      }
+    : null;
+
   // PanResponder creado una sola vez; lee item/drag "vivos" vía ref.
   const latest = useRef({ item, drag });
   latest.current = { item, drag };
+  // Marca que hubo un arrastre real para descartar el "click fantasma" que el
+  // navegador dispara sobre la tarjeta al soltar (si no, se abría la edición).
+  const draggedRef = useRef(false);
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_e, g) =>
         !!latest.current.drag && Math.hypot(g.dx, g.dy) > 8,
-      onPanResponderGrant: (_e, g) => latest.current.drag?.onStart(latest.current.item, g),
+      onPanResponderGrant: (_e, g) => { draggedRef.current = true; latest.current.drag?.onStart(latest.current.item, g); },
       onPanResponderMove: (_e, g) => latest.current.drag?.onMove(g),
-      onPanResponderRelease: (_e, g) => latest.current.drag?.onEnd(g),
-      onPanResponderTerminate: (_e, g) => latest.current.drag?.onEnd(g),
+      onPanResponderRelease: (_e, g) => { latest.current.drag?.onEnd(g); setTimeout(() => { draggedRef.current = false; }, 350); },
+      onPanResponderTerminate: (_e, g) => { latest.current.drag?.onEnd(g); setTimeout(() => { draggedRef.current = false; }, 350); },
       onPanResponderTerminationRequest: () => false,
     })
   ).current;
   const panHandlers = drag ? pan.panHandlers : {};
 
+  // Tras un arrastre, el primer tap se ignora (era el final del arrastre).
+  const handlePress = () => {
+    if (draggedRef.current) { draggedRef.current = false; return; }
+    onPress();
+  };
+
   return (
-    <View style={[c.card, dragging && c.cardDragging]} {...panHandlers}>
-      <PressScale style={[c.tap, compact && c.tapC]} onPress={onPress}>
+    <Animated.View style={[c.card, compact && c.cardDraggable, dragging && c.cardDragging, enterStyle]} {...panHandlers}>
+      <PressScale style={[c.tap, compact && c.tapC]} onPress={handlePress}>
         <View style={{ flex: 1 }}>
           <Text style={[c.name, compact && c.nameC]} numberOfLines={compact ? 3 : 2}>{item.title}</Text>
           {compact ? (
@@ -324,9 +360,11 @@ function ItemCard({
       <TouchableOpacity style={[c.del, compact && c.delC]} onPress={onDelete} hitSlop={8}>
         <Text style={c.delText}>✕</Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
-}
+}, (a, b) =>
+  a.item === b.item && a.color === b.color && a.compact === b.compact
+  && a.dragging === b.dragging && a.justMoved === b.justMoved);
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -371,11 +409,15 @@ export default function TripDetailScreen() {
   // ── Arrastrar y soltar (solo escritorio) ────────────────────────────────────
   const [dragItem, setDragItem] = useState<TripItem | null>(null);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [justMovedId, setJustMovedId] = useState<string | null>(null);
   const dragPos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const cloneScale = useRef(new Animated.Value(1)).current;
+  const cloneOpacity = useRef(new Animated.Value(1)).current;
   const cellRefs = useRef<Map<string, View | null>>(new Map());
   const zonesRef = useRef<Array<{ key: string; x: number; y: number; w: number; h: number }>>([]);
   const dragItemRef = useRef<TripItem | null>(null);
   const hoverRef = useRef<string | null>(null);
+  const settlingRef = useRef(false);          // durante la animación de aterrizaje ignoramos nuevos gestos
 
   const registerCell = (key: string) => (ref: View | null) => {
     if (ref) cellRefs.current.set(key, ref); else cellRefs.current.delete(key);
@@ -403,13 +445,39 @@ export default function TripDetailScreen() {
     return null;
   };
 
+  // Mientras se arrastra, bloqueamos la selección de texto y ponemos cursor
+  // "grabbing" en todo el documento (web) — si no, arrastrar sobre las tarjetas
+  // selecciona su texto como si pasaras el ratón por encima.
+  const setDragActiveWeb = (on: boolean) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const b = document.body.style as any;
+    b.userSelect = on ? 'none' : '';
+    b.webkitUserSelect = on ? 'none' : '';
+    b.cursor = on ? 'grabbing' : '';
+  };
+
+  const clearDrag = () => {
+    settlingRef.current = false;
+    dragItemRef.current = null; hoverRef.current = null;
+    setDragItem(null); setHoverKey(null);
+    cloneScale.setValue(1); cloneOpacity.setValue(1);
+    setDragActiveWeb(false);
+  };
+
   const dragApi: DragApi = {
     onStart: (item, g) => {
+      if (settlingRef.current) return;
       dragItemRef.current = item;
       setDragItem(item);
+      setJustMovedId(null);
       measureZones();
       const o = scrollOff();
       dragPos.setValue({ x: g.moveX - o.x - CLONE_GRAB, y: g.moveY - o.y - CLONE_GRAB });
+      cloneOpacity.setValue(1);
+      cloneScale.setValue(1);
+      // Pequeño "lift" al levantar la tarjeta (Emil: feedback físico sutil).
+      Animated.spring(cloneScale, { toValue: 1.04, useNativeDriver: false, speed: 20, bounciness: 8 }).start();
+      setDragActiveWeb(true);
     },
     onMove: (g) => {
       const o = scrollOff();
@@ -421,14 +489,41 @@ export default function TripDetailScreen() {
       const o = scrollOff();
       const k = hitTest(g.moveX - o.x, g.moveY - o.y);
       const it = dragItemRef.current;
-      if (it && k) {
+      // Al soltar quitamos ya el resalte de la celda; el clon sigue animándose.
+      hoverRef.current = null; setHoverKey(null);
+      const move = it && k
+        ? (() => { const [day, kind] = k.split('|'); return day !== it.day || kind !== it.kind; })()
+        : false;
+
+      if (move && it && k) {
+        // Aterrizaje: el clon vuela con muelle a la celda destino y se funde
+        // mientras la tarjeta real entra animada allí (crossfade natural).
         const [day, kind] = k.split('|') as [string, TripItemKind];
-        if (day !== it.day || kind !== it.kind) {
+        const z = zonesRef.current.find((zz) => zz.key === k);
+        // z siempre existe (k viene de hitTest); si no, deja el clon donde está.
+        const target = z
+          ? { x: z.x - o.x + 6, y: z.y - o.y + 44 }
+          : { x: g.moveX - o.x - CLONE_GRAB, y: g.moveY - o.y - CLONE_GRAB };
+        settlingRef.current = true;
+        Animated.parallel([
+          Animated.spring(dragPos, { toValue: target, useNativeDriver: false, speed: 18, bounciness: 4 }),
+          Animated.timing(cloneScale, { toValue: 0.96, duration: 200, easing: EASE_OUT, useNativeDriver: false }),
+          Animated.timing(cloneOpacity, { toValue: 0, duration: 150, delay: 90, easing: EASE_OUT, useNativeDriver: false }),
+        ]).start(() => {
           useTripStore.getState().updateItem(periodId, it.id, { day, kind });
-        }
+          setJustMovedId(it.id);
+          clearDrag();
+          setTimeout(() => setJustMovedId((cur) => (cur === it.id ? null : cur)), 500);
+        });
+      } else {
+        // Misma celda o fuera de destino: no se mueve nada → el clon se
+        // desvanece EN EL SITIO (sin viajar), para que no haya slide lateral.
+        settlingRef.current = true;
+        Animated.parallel([
+          Animated.timing(cloneOpacity, { toValue: 0, duration: 150, easing: EASE_OUT, useNativeDriver: false }),
+          Animated.timing(cloneScale, { toValue: 0.96, duration: 150, easing: EASE_OUT, useNativeDriver: false }),
+        ]).start(() => clearDrag());
       }
-      dragItemRef.current = null; hoverRef.current = null;
-      setDragItem(null); setHoverKey(null);
     },
   };
 
@@ -499,6 +594,7 @@ export default function TripDetailScreen() {
                 onDelete={() => confirmDelete(it.id, it.title)}
                 drag={compact ? dragApi : undefined}
                 dragging={dragItem?.id === it.id}
+                justMoved={compact && justMovedId === it.id}
               />
             ))}
           </View>
@@ -621,7 +717,12 @@ export default function TripDetailScreen() {
       {dragItem && (
         <Animated.View
           pointerEvents="none"
-          style={[dg.clone, { width: colW, borderColor: color, transform: dragPos.getTranslateTransform() }]}
+          style={[dg.clone, cloneHint, {
+            width: colW,
+            borderColor: color,
+            opacity: cloneOpacity,
+            transform: [...dragPos.getTranslateTransform(), { scale: cloneScale }],
+          }]}
         >
           <Text style={dg.cloneName} numberOfLines={2}>{dragItem.title}</Text>
           {dragItem.price != null && <Text style={[dg.clonePrice, { color }]}>{money(dragItem.price)}</Text>}
@@ -702,6 +803,8 @@ const s = StyleSheet.create({
 
 const c = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingRight: 6 },
+  // Arrastrable (escritorio): sin selección de texto y cursor de agarre en web.
+  cardDraggable: Platform.select({ web: { userSelect: 'none', cursor: 'grab' }, default: {} }) as any,
   cardDragging: { opacity: 0.35 },
   tap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, paddingLeft: 14, paddingRight: 4 },
   tapC: { paddingVertical: 9, paddingLeft: 10, paddingRight: 2 },
