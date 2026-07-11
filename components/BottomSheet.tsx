@@ -3,6 +3,7 @@ import {
   Animated, Pressable, View, Modal, Easing, StyleSheet, Dimensions,
   KeyboardAvoidingView, Platform, PanResponder, StyleProp, ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, R } from '@/constants/theme';
 import { useReducedMotion } from '@/lib/useReducedMotion';
 
@@ -31,6 +32,7 @@ interface Props {
 
 export default function BottomSheet({ visible, onClose, children, sheetStyle }: Props) {
   const reduced = useReducedMotion();
+  const insets = useSafeAreaInsets();
   // Mantiene el Modal montado durante la animación de salida.
   const [render, setRender] = useState(visible);
   const heightRef = useRef(SCREEN_H);
@@ -84,10 +86,14 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   return (
     <Modal visible={render} transparent animationType="none" onRequestClose={onClose}>
       <AnimatedPressable style={[s.scrim, { opacity: scrim }]} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} pointerEvents="box-none">
+      <KeyboardAvoidingView
+        style={s.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        pointerEvents="box-none"
+      >
         <Animated.View
           onLayout={(e) => { heightRef.current = e.nativeEvent.layout.height; }}
-          style={[s.sheet, sheetStyle, { transform: [{ translateY }] }]}
+          style={[s.sheet, { paddingBottom: insets.bottom }, sheetStyle, { transform: [{ translateY }] }]}
         >
           {/* Zona de arrastre: el asa + un área generosa alrededor. */}
           <View style={s.grabZone} {...pan.panHandlers}>
@@ -101,7 +107,9 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
 }
 
 const s = StyleSheet.create({
-  scrim: { flex: 1, backgroundColor: 'rgba(33,28,23,0.42)' },
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(33,28,23,0.42)' },
+  // Contenedor a pantalla completa que ancla el sheet abajo (fiable en web).
+  kav: { flex: 1, justifyContent: 'flex-end' },
   sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl, maxHeight: '88%' },
   grabZone: { alignItems: 'center', paddingTop: 12, paddingBottom: 8 },
   grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line },

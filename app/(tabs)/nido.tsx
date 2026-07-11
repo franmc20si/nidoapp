@@ -272,11 +272,11 @@ export default function NidoScreen() {
           <PressScale
             style={s.recurBtn}
             onPress={() => router.push('/recurrentes')}
-            scaleTo={0.94}
+            scaleTo={0.9}
             accessibilityRole="button"
             accessibilityLabel="Ver tareas recurrentes por semana"
           >
-            <Text style={s.recurBtnText}>🔁 Recurrentes</Text>
+            <Text style={s.recurBtnText}>🔁</Text>
           </PressScale>
         </View>
 
@@ -356,8 +356,8 @@ const s = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, marginBottom: 14 },
   statusPill: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card },
   statusText: { fontSize: 13, fontWeight: '500', color: C.ink2, fontFamily: FONT },
-  recurBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: R.pill, backgroundColor: C.cristalesTint, borderWidth: 1.5, borderColor: C.cristales + '55' },
-  recurBtnText: { fontSize: 13, fontWeight: '600', color: C.cristales, fontFamily: FONT },
+  recurBtn: { alignItems: 'center', justifyContent: 'center', width: 40, height: 38, borderRadius: R.pill, backgroundColor: C.cristalesTint, borderWidth: 1.5, borderColor: C.cristales + '55' },
+  recurBtnText: { fontSize: 17, fontFamily: FONT },
 
   list: { paddingHorizontal: 20, marginTop: 2 },
   empty: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },
