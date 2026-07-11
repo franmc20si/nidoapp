@@ -126,17 +126,29 @@ export default function NidoScreen() {
     }
   };
 
-  // Swipe-a-izquierda en la tarjeta → eliminar, con deshacer (reinserta la fila).
-  const deleteTask = (task: Task) => {
-    const restore = () => setTasks(prev => prev.some(t => t.id === task.id) ? prev : [...prev, task]);
-    setTasks(prev => prev.filter(t => t.id !== task.id));
-    withTimeout(supabase.from('tasks').delete().eq('id', task.id))
-      .then((res: any) => { if (res?.error) { restore(); showToast('No se pudo eliminar la tarea', 'error'); } })
-      .catch(() => { restore(); showToast('No se pudo eliminar la tarea', 'error'); });
-    showToast('Tarea eliminada', 'success', { label: 'Deshacer', onPress: () => {
-      restore();
-      supabase.from('tasks').insert(task as any).then(() => {});
-    }});
+  // Swipe-a-izquierda → DESCARTAR: marca la tarea como realizada pero SIN autor
+  // (completed_by/completed_at a null) → sale del pendiente y no cuenta en el
+  // reparto ni en los puntos. Las recurrentes avanzan a su próximo día.
+  const discardTask = (task: Task) => {
+    const snapshot = task;
+    const undo = () => {
+      setTasks(prev => prev.map(t => t.id === task.id ? snapshot : t));
+      supabase.from('tasks').update({
+        is_done: snapshot.is_done,
+        due_date: (snapshot as any).due_date ?? null,
+        completed_by: snapshot.completed_by ?? null,
+        completed_at: snapshot.completed_at ?? null,
+      }).eq('id', task.id).then(() => {});
+    };
+    const patch: any = { is_done: true, completed_by: null, completed_at: null };
+    if (task.is_recurring && task.recurrence_rule) {
+      patch.due_date = nextDueDate(task.recurrence_rule, new Date(), task.weekdays);
+    }
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t));
+    withTimeout(supabase.from('tasks').update(patch).eq('id', task.id))
+      .then((res: any) => { if (res?.error) { undo(); showToast('No se pudo descartar la tarea', 'error'); } })
+      .catch(() => { undo(); showToast('No se pudo descartar la tarea', 'error'); });
+    showToast('Tarea descartada', 'success', { label: 'Deshacer', onPress: undo });
   };
 
   const shown = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
@@ -311,7 +323,7 @@ export default function NidoScreen() {
                 task={task}
                 onToggle={toggleTask}
                 onPress={setEditingTask}
-                onDelete={deleteTask}
+                onSwipe={statusFilter === 'pendiente' ? discardTask : undefined}
                 completerName={task.is_done && task.completed_by ? profiles[task.completed_by] ?? null : null}
               />
             </StaggerItem>

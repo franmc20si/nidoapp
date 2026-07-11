@@ -27,11 +27,11 @@ interface Props {
   onToggle: (task: Task) => void;
   onAnimatedOut?: (task: Task) => void;
   onPress?: (task: Task) => void;
-  onDelete?: (task: Task) => void;
+  onSwipe?: (task: Task) => void;
   completerName?: string | null;
 }
 
-export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onDelete, completerName }: Props) {
+export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onSwipe, completerName }: Props) {
   const cat = catFor(task.category);
   const pts: number = task.points ?? 10;
   const min: number = task.duration_min ?? pts * 5;
@@ -51,19 +51,19 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onDel
 
   // Swipe a la izquierda para eliminar. Refs "latest" para no capturar props
   // viejos en el PanResponder (creado una sola vez con useRef).
-  const latest = useRef({ task, onDelete });
-  latest.current = { task, onDelete };
+  const latest = useRef({ task, onSwipe });
+  latest.current = { task, onSwipe };
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => g.dx < -6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
       onPanResponderMove: (_, g) => translateX.setValue(Math.min(0, g.dx)),
       onPanResponderRelease: (_, g) => {
-        const { task: t, onDelete: del } = latest.current;
-        if (del && (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5)) {
+        const { task: t, onSwipe: swipe } = latest.current;
+        if (swipe && (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5)) {
           Animated.parallel([
             Animated.timing(translateX, { toValue: -SCREEN_W, duration: 220, easing: EASE_OUT, useNativeDriver: true }),
             Animated.timing(opacity,    { toValue: 0,         duration: 200, easing: EASE_OUT, useNativeDriver: true }),
-          ]).start(() => del(t));
+          ]).start(() => swipe(t));
         } else {
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 0 }).start();
         }
@@ -87,12 +87,12 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onDel
 
   return (
     <View style={s.wrap}>
-      <View style={s.deleteBg} pointerEvents="none">
-        <Text style={s.deleteText}>Eliminar</Text>
-        <Text style={s.deleteEmoji}>🗑️</Text>
+      <View style={s.swipeBg} pointerEvents="none">
+        <Text style={s.swipeText}>Descartar</Text>
+        <Text style={s.swipeIcon}>✓</Text>
       </View>
       <Animated.View
-        {...(onDelete ? pan.panHandlers : {})}
+        {...(onSwipe ? pan.panHandlers : {})}
         style={[
           s.card,
           { backgroundColor: th.bg, borderColor: th.border, transform: [{ translateX }, { scale: cardScale }], opacity },
@@ -152,14 +152,14 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onDel
 
 const s = StyleSheet.create({
   wrap: { marginBottom: 10, borderRadius: R.l },
-  deleteBg: {
+  swipeBg: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: C.danger, borderRadius: R.l,
+    backgroundColor: C.info, borderRadius: R.l,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
     paddingHorizontal: 22, gap: 8,
   },
-  deleteText: { color: C.white, fontWeight: '700', fontFamily: FONT, fontSize: 14 },
-  deleteEmoji: { fontSize: 18 },
+  swipeText: { color: C.white, fontWeight: '700', fontFamily: FONT, fontSize: 14 },
+  swipeIcon: { color: C.white, fontWeight: '700', fontSize: 18 },
   card: { borderRadius: R.l, padding: 16, borderWidth: 1 },
   done: { opacity: 0.58 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
