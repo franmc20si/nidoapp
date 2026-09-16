@@ -54,7 +54,7 @@ function DesktopSidebar({ state, navigation, accent }: any) {
     <View style={tb.sidebar}>
       <View style={tb.brand}>
         <IcoNest size={24} color={accent.hex} fill="transparent" strokeWidth={2.4} />
-        <Text style={[tb.brandText, { color: accent.hex }]}>Nido</Text>
+        <Text style={[tb.brandText, { color: accent.hex }]}>Needoo</Text>
       </View>
 
       {DESKTOP_TABS.map((tab) => {

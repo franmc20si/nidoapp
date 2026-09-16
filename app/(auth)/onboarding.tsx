@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
             <IlluNidoLimpio size={120} color={C.brand} fill={C.brandWash} />
           </View>
 
-          <Text style={s.headline}>Bienvenido a Nido</Text>
+          <Text style={s.headline}>Bienvenido a Needoo</Text>
           <Text style={s.lead}>¿Quieres crear tu propio nido o unirte al de alguien?</Text>
 
           {/* Option cards */}
@@ -112,7 +112,7 @@ export default function OnboardingScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.cardTitle}>Crear un nido</Text>
-              <Text style={s.cardDesc}>Soy el primero de mi casa en usar Nido</Text>
+              <Text style={s.cardDesc}>Soy el primero de mi casa en usar Needoo</Text>
             </View>
             <Text style={s.cardCaret}>›</Text>
           </TouchableOpacity>
@@ -208,7 +208,7 @@ export default function OnboardingScreen() {
   if (step === 'created') {
     const shareCode = async () => {
       try {
-        await Share.share({ message: `Únete a mi nido en la app Nido. Código de invitación: ${createdCode}` });
+        await Share.share({ message: `Únete a mi nido en la app Needoo. Código de invitación: ${createdCode}` });
       } catch {}
     };
     return (
@@ -255,7 +255,7 @@ export default function OnboardingScreen() {
 
         <Text style={s.stepEyebrow}>CÓDIGO DE INVITACIÓN</Text>
         <Text style={s.stepTitle}>Únete al nido{'\n'}de tu hogar</Text>
-        <Text style={s.stepSub}>Pídele el código de 6 caracteres a quien ya usa Nido en tu casa</Text>
+        <Text style={s.stepSub}>Pídele el código de 6 caracteres a quien ya usa Needoo en tu casa</Text>
 
         <TextInput
           style={[s.input, s.inputCode, { borderColor: inviteCode.length === 6 ? C.brand : C.line }]}

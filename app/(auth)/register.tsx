@@ -13,7 +13,7 @@ export default function RegisterScreen() {
   const handleGoogle = async () => {
     const redirectTo = typeof window !== 'undefined'
       ? `${window.location.origin}/auth-callback`
-      : 'nido://auth/callback';
+      : 'needoo://auth/callback';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },
@@ -39,7 +39,7 @@ export default function RegisterScreen() {
 
         <View style={s.header}>
           <Text style={s.title}>Crear cuenta</Text>
-          <Text style={s.subtitle}>Únete a Nido y organiza tu hogar</Text>
+          <Text style={s.subtitle}>Únete a Needoo y organiza tu hogar</Text>
         </View>
 
         {/* Google */}

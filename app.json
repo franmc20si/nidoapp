@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Nido",
-    "slug": "nido",
+    "name": "Needoo",
+    "slug": "needoo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,13 +11,13 @@
       "backgroundColor": "#ffffff"
     },
     "userInterfaceStyle": "automatic",
-    "scheme": "nido",
+    "scheme": "needoo",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "art.drama.nido"
+      "bundleIdentifier": "app.needoo"
     },
     "android": {
-      "package": "art.drama.nido",
+      "package": "app.needoo",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -26,8 +26,8 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "name": "Nido",
-      "shortName": "Nido",
+      "name": "Needoo",
+      "shortName": "Needoo",
       "description": "Tu casa, en orden. Sin discusiones.",
       "themeColor": "#ffffff",
       "backgroundColor": "#ffffff"

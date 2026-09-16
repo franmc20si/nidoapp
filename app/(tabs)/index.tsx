@@ -385,7 +385,7 @@ export default function HoyScreen() {
             onPress={() => setNidoSheetVisible(true)}
             scaleTo={0.97}
             accessibilityRole="button"
-            accessibilityLabel={`Nido ${household?.name ?? 'Nuestro nido'}, ajustes`}
+            accessibilityLabel={`Needoo ${household?.name ?? 'Nuestro nido'}, ajustes`}
           >
             <Text style={n.nidoChipNest}>🪺</Text>
             <Text style={n.nidoChipName}>{household?.name ?? 'Nuestro nido'}</Text>

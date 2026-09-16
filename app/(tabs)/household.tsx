@@ -182,8 +182,8 @@ export default function ProfileScreen() {
     const code = household?.invite_code;
     if (!code) return;
     Share.share({
-      message: `Únete a mi nido en la app Nido con el código: ${code}`,
-      title: 'Código de invitación Nido',
+      message: `Únete a mi nido en la app Needoo con el código: ${code}`,
+      title: 'Código de invitación Needoo',
     });
   };
 

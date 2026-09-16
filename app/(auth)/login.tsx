@@ -15,7 +15,7 @@ export default function LoginScreen() {
   const handleGoogle = async () => {
     const redirectTo = typeof window !== 'undefined'
       ? `${window.location.origin}/auth-callback`
-      : 'nido://auth/callback';
+      : 'needoo://auth/callback';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },
@@ -38,10 +38,10 @@ export default function LoginScreen() {
         <View style={s.welcomeTop}>
           <View style={s.logoRow}>
             <Text style={s.logoIcon}>🪺</Text>
-            <Text style={s.logoWord}>nido</Text>
+            <Text style={s.logoWord}>needoo</Text>
           </View>
           <Text style={s.headline}>Tu casa, en orden.{'\n'}Sin discusiones.</Text>
-          <Text style={s.lead}>Organiza las tareas del hogar tú solo, en pareja o en familia. Cada uno aporta, y nido lo cuenta por ti.</Text>
+          <Text style={s.lead}>Organiza las tareas del hogar tú solo, en pareja o en familia. Cada uno aporta, y Needoo lo cuenta por ti.</Text>
         </View>
 
         {/* Illustration */}
