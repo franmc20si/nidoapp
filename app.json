@@ -19,7 +19,7 @@
     "android": {
       "package": "app.needoo",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png"
       }
     },
