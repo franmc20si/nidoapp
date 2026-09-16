@@ -10,7 +10,7 @@ import TaskCard from '@/components/TaskCard';
 import StaggerItem from '@/components/StaggerItem';
 import PressScale from '@/components/PressScale';
 import { AlertCards } from '@/components/AlertSystem';
-import { nextDueDate, isDueAgain } from '@/lib/recurrence';
+import { nextDueDate, isDueAgain, mondayFirstWeekday } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
 import { IlluNidoLimpio } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
@@ -18,6 +18,27 @@ import TaskEditSheet from '@/components/TaskEditSheet';
 import { showToast } from '@/store/toastStore';
 import { withTimeout } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
+
+// Orden de las franjas del día (mañana → noche). Sin franja va al final del día.
+const SLOT_ORDER: Record<string, number> = { manana: 0, comida: 1, tarde: 2, noche: 3 };
+
+// Posición FIJA de la tarea en la semana (Lunes → Domingo), para ordenar "Por
+// hacer" recorriendo el calendario de tareas sin depender de hoy: una tarea del
+// martes se queda en el martes aunque olvidaras marcarla. Dentro del día se
+// ordena por franja. Devuelve {day, slot} comparables numéricamente.
+function weekAppearance(t: Task): { day: number; slot: number } {
+  const slot = t.day_slot != null && SLOT_ORDER[t.day_slot] != null ? SLOT_ORDER[t.day_slot] : 4;
+
+  // Diaria: toca cada día → arriba del todo.
+  if (t.is_recurring && t.recurrence_rule === 'daily') return { day: -1, slot };
+  // Semanal anclada a día(s): su día fijo (el más temprano del conjunto, 0=Lun).
+  if (t.weekdays && t.weekdays.length) return { day: Math.min(...t.weekdays), slot };
+  // Con fecha concreta (quincenal, mensual, trimestral, puntual): en el día de
+  // la semana de su fecha.
+  if (t.due_date) return { day: mondayFirstWeekday(new Date(t.due_date + 'T00:00:00')), slot };
+  // Sin día ni fecha → al final.
+  return { day: 999, slot };
+}
 
 export default function NidoScreen() {
   const { household, user } = useAuthStore();
@@ -151,7 +172,15 @@ export default function NidoScreen() {
     showToast('Tarea descartada', 'success', { label: 'Deshacer', onPress: undo });
   };
 
-  const shown = statusFilter === 'pendiente' ? tasks.filter(t => !t.is_done)
+  const shown = statusFilter === 'pendiente'
+                // Por hacer: ordenadas por su posición fija en la semana
+                // (Lun→Dom, luego franja), como recorre el calendario de tareas.
+                ? tasks.filter(t => !t.is_done).sort((a, b) => {
+                    const A = weekAppearance(a), B = weekAppearance(b);
+                    if (A.day !== B.day) return A.day - B.day;
+                    if (A.slot !== B.slot) return A.slot - B.slot;
+                    return a.title.localeCompare(b.title);
+                  })
               : statusFilter === 'realizada'
                 // Histórico: de la más recientemente hecha a la más antigua
                 // (por completed_at, no por fecha de creación). Nulls al final.
