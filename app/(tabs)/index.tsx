@@ -242,16 +242,27 @@ export default function HoyScreen() {
   }, [household]));
 
   // ── Weekly % ──────────────────────────────────────────────────────────────
+  // "Hechas" = completadas DENTRO de esta semana (por completed_at), no el
+  // histórico acumulado (antes toda puntual hecha, con due_date null, contaba
+  // para siempre → inflaba el número). "Total" = las hechas esta semana + las
+  // pendientes relevantes (con vencimiento esta semana o sin fecha).
   const monday    = getMondayOfWeek(new Date());
   const sunday    = new Date(monday); sunday.setDate(monday.getDate() + 6); sunday.setHours(23, 59, 59, 999);
-  const weekTasks = tasks.filter(t => {
-    const due = (t as any).due_date;
-    if (!due) return true;
-    const d = new Date(due);
+  const inThisWeek = (iso: string | null | undefined) => {
+    if (!iso) return false;
+    const d = new Date(iso);
     return d >= monday && d <= sunday;
+  };
+  const weekDone    = tasks.filter(t => t.is_done && inThisWeek(t.completed_at));
+  const weekPending = tasks.filter(t => {
+    if (t.is_done) return false;
+    const due = (t as any).due_date;
+    if (!due) return true;              // to-do sin fecha → pendiente de esta semana
+    const d = new Date(due);
+    return d >= monday && d <= sunday;  // pendiente con vencimiento esta semana
   });
-  const doneCount = weekTasks.filter(t => t.is_done).length;
-  const total     = weekTasks.length;
+  const doneCount = weekDone.length;
+  const total     = doneCount + weekPending.length;
   const pct       = total ? Math.round((doneCount / total) * 100) : 0;
   const pendingCount = tasks.filter(t => !t.is_done).length;
 
@@ -611,7 +622,7 @@ const n = StyleSheet.create({
   badge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: C.white, fontSize: 12, fontWeight: '600', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
-  itemScroll: { maxHeight: 88 },
+  itemScroll: { maxHeight: 99 }, // 3 filas exactas (33px c/u) para no cortar el check de la última
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 7 },
   itemCheck: { width: 19, height: 19, borderRadius: 10, borderWidth: 2, backgroundColor: 'transparent', flexShrink: 0 },
   itemName: { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT, fontWeight: '500' },
