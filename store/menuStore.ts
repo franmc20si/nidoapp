@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { Ingredient } from '@/components/ShoppingListSheet';
 import { showToast } from '@/store/toastStore';
-import { readWithRetry } from '@/lib/withTimeout';
+import { readWithRetry, writeWithTimeout } from '@/lib/withTimeout';
 
 // ─── tipos compartidos ───────────────────────────────────────────────────────
 export interface Recipe {
@@ -51,11 +51,10 @@ interface MenuState {
 }
 
 async function upsertWeekPlan(householdId: string, weekKey: string, plan: Plan) {
-  const { error } = await supabase.from('meal_plans').upsert(
+  await writeWithTimeout(() => supabase.from('meal_plans').upsert(
     { household_id: householdId, week_key: weekKey, plan, updated_at: new Date().toISOString() },
     { onConflict: 'household_id,week_key' }
-  );
-  if (error) throw error;
+  ));
 }
 
 export const useMenuStore = create<MenuState>((set, get) => ({
@@ -106,9 +105,9 @@ export const useMenuStore = create<MenuState>((set, get) => ({
             try {
               const parsed: Recipe[] = JSON.parse(rRaw);
               if (Array.isArray(parsed) && parsed.length) {
-                await supabase.from('recipes').insert(
+                await writeWithTimeout(() => supabase.from('recipes').insert(
                   parsed.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: r.ingredients ?? [], household_id: householdId }))
-                );
+                ));
                 seeded = parsed;
                 await AsyncStorage.removeItem(STORAGE_RECIPES);
               }
@@ -119,10 +118,10 @@ export const useMenuStore = create<MenuState>((set, get) => ({
           // Sembrar las recetas de ejemplo como filas REALES en Supabase, una
           // sola vez, para que tengan ids reales y nunca enmascaren nada.
           // upsert + ignoreDuplicates: si otro dispositivo ya las sembró, no falla.
-          await supabase.from('recipes').upsert(
+          await writeWithTimeout(() => supabase.from('recipes').upsert(
             DEFAULT_RECIPES.map(r => ({ id: r.id, name: r.name, color: r.color, meals: r.meals, ingredients: [], household_id: householdId })),
             { onConflict: 'id', ignoreDuplicates: true }
-          );
+          ));
           seeded = DEFAULT_RECIPES;
         }
         set({ recipes: seeded });
@@ -142,7 +141,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
             const parsed: WeeklyPlans = JSON.parse(pRaw);
             if (parsed && typeof parsed === 'object') {
               const rows = Object.entries(parsed).map(([week_key, plan]) => ({ household_id: householdId, week_key, plan }));
-              if (rows.length > 0) await supabase.from('meal_plans').insert(rows);
+              if (rows.length > 0) await writeWithTimeout(() => supabase.from('meal_plans').insert(rows));
               set({ weeklyPlans: parsed });
               await AsyncStorage.removeItem(STORAGE_PLANS);
             }
@@ -181,9 +180,9 @@ export const useMenuStore = create<MenuState>((set, get) => ({
 
     try {
       if (isExisting) {
-        await supabase.from('recipes').update({
+        await writeWithTimeout(() => supabase.from('recipes').update({
           name: saved.name, color: saved.color, meals: saved.meals, ingredients: saved.ingredients ?? [],
-        }).eq('id', saved.id).eq('household_id', householdId);
+        }).eq('id', saved.id).eq('household_id', householdId));
 
         // Limpiar huecos del plan donde la receta ya no sirve esa comida
         const updatedPlans: WeeklyPlans = { ...weeklyPlans };
@@ -198,10 +197,10 @@ export const useMenuStore = create<MenuState>((set, get) => ({
         }
         set({ weeklyPlans: updatedPlans });
       } else {
-        await supabase.from('recipes').insert({
+        await writeWithTimeout(() => supabase.from('recipes').insert({
           id: saved.id, name: saved.name, color: saved.color,
           meals: saved.meals, ingredients: saved.ingredients ?? [], household_id: householdId,
-        });
+        }));
       }
       return { ok: true };
     } catch (e) {
@@ -222,7 +221,7 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     set({ recipes: recipes.filter(r => r.id !== id), weeklyPlans: updatedPlans });
 
     try {
-      await supabase.from('recipes').delete().eq('id', id).eq('household_id', householdId);
+      await writeWithTimeout(() => supabase.from('recipes').delete().eq('id', id).eq('household_id', householdId));
       for (const wk in updatedPlans) await upsertWeekPlan(householdId, wk, updatedPlans[wk]);
       return { ok: true };
     } catch (e) {

@@ -7,6 +7,24 @@ export function withTimeout<T>(p: PromiseLike<T>, ms = 12000): Promise<T> {
   ]);
 }
 
+// Escritura Supabase robusta: timeout duro sobre el builder de PostgREST.
+// supabase-js no lleva timeout propio y no lanza (resuelve { data, error }).
+// Sin esto, un upsert/insert/update/delete colgado (blip de red, lock de auth)
+// deja la promesa en vuelo para siempre — y con ella cualquier lock de estado
+// que se libere en el `finally` (p.ej. `loadingFor`), congelando la pantalla.
+// Aquí: si tarda más de `ms` → rechaza TIMEOUT; si Supabase devuelve { error }
+// → lanza ese error. Así el try/catch del llamador SIEMPRE se resuelve y puede
+// mostrar feedback. `make` se invoca una vez (los builders son thenables de un
+// solo uso).
+export async function writeWithTimeout<T = any>(
+  make: () => PromiseLike<{ data: T; error: any }>,
+  ms = 12000,
+): Promise<T> {
+  const res = await withTimeout(make(), ms);
+  if (res?.error) throw res.error;
+  return res?.data as T;
+}
+
 // Lectura Supabase robusta: timeout + 1 reintento ante fallo transitorio.
 // supabase-js no lanza: resuelve { data, error }. Un blip de red/RLS o un
 // timeout NO deben confundirse con "sin datos" (eso vacía listas y desmarca
