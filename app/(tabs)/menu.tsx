@@ -57,6 +57,10 @@ export default function MenuScreen() {
   const first         = days[0], last = days[6];
   const todayDow      = (today.getDay() + 6) % 7; // Mon=0
   const isThisWeek    = offset === 0;
+  // Etiqueta de mes para el eyebrow: un mes, o "MES1 - MES2" si la semana los cruza.
+  const monthLabel    = first.getMonth() === last.getMonth()
+    ? MN_MONTHS[first.getMonth()]
+    : `${MN_MONTHS[first.getMonth()]} - ${MN_MONTHS[last.getMonth()]}`;
 
   const { accent } = useNidoStore();
   const { household } = useAuthStore();
@@ -145,7 +149,7 @@ export default function MenuScreen() {
       {/* ─── header ─────────────────────────────────────────────────────── */}
       <View style={s.topbar}>
         <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>Semana {week}</Text>
+          <Text style={s.eyebrow}>{monthLabel} / Semana {week}</Text>
 
           {/* Navigation row */}
           <View style={s.navRow}>
@@ -158,7 +162,6 @@ export default function MenuScreen() {
               <Text style={s.rangeStrong}>{MN_DAYS_SHORT[0].toUpperCase()} {String(first.getDate()).padStart(2,'0')}</Text>
               <Text style={{ color: dim }}> al </Text>
               <Text style={s.rangeStrong}>{MN_DAYS_SHORT[6].toUpperCase()} {String(last.getDate()).padStart(2,'0')}</Text>
-              <Text style={{ color: dim }}> de {MN_MONTHS[last.getMonth()]}</Text>
             </Text>
 
             <PressScale style={s.navBtn} onPress={() => setOffset(o => o + 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana siguiente">
