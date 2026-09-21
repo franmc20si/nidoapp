@@ -10,7 +10,7 @@ import TaskCard from '@/components/TaskCard';
 import StaggerItem from '@/components/StaggerItem';
 import PressScale from '@/components/PressScale';
 import { AlertCards } from '@/components/AlertSystem';
-import { nextDueDate, isDueAgain, mondayFirstWeekday } from '@/lib/recurrence';
+import { nextDueAfterComplete, shouldReappear, mondayFirstWeekday } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
 import { IlluNidoLimpio } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
@@ -47,6 +47,7 @@ export default function NidoScreen() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'pendiente' | 'realizada' | 'todas'>('pendiente');
+  const [expanded, setExpanded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export default function NidoScreen() {
       const tasks: Task[] = (data ?? []) as Task[];
 
       const toReset = tasks.filter(t =>
-        t.is_done && t.is_recurring && isDueAgain(t.due_date)
+        t.is_done && t.is_recurring && shouldReappear(t.recurrence_rule, t.due_date)
       );
       if (toReset.length > 0) {
         const ids = toReset.map(t => t.id);
@@ -134,7 +135,7 @@ export default function NidoScreen() {
     };
 
     if (markingDone && task.is_recurring && task.recurrence_rule) {
-      const due = nextDueDate(task.recurrence_rule, new Date(), task.weekdays);
+      const due = nextDueAfterComplete(task.recurrence_rule, new Date(), task.weekdays);
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt } : t));
       const { error } = await supabase.from('tasks').update({ is_done: true, due_date: due, completed_by: completedBy, completed_at: completedAt }).eq('id', task.id);
       if (error) { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_done: false } : t)); showToast('No se pudo actualizar la tarea', 'error'); return; }
@@ -149,7 +150,8 @@ export default function NidoScreen() {
 
   // Swipe-a-izquierda → DESCARTAR: marca la tarea como realizada pero SIN autor
   // (completed_by/completed_at a null) → sale del pendiente y no cuenta en el
-  // reparto ni en los puntos. Las recurrentes avanzan a su próximo día.
+  // reparto ni en los puntos. Semanales/diarias se aparcan hasta el lunes que
+  // viene; las de intervalo (quincenal/mensual/trimestral) saltan su intervalo.
   const discardTask = (task: Task) => {
     const snapshot = task;
     const undo = () => {
@@ -163,7 +165,7 @@ export default function NidoScreen() {
     };
     const patch: any = { is_done: true, completed_by: null, completed_at: null };
     if (task.is_recurring && task.recurrence_rule) {
-      patch.due_date = nextDueDate(task.recurrence_rule, new Date(), task.weekdays);
+      patch.due_date = nextDueAfterComplete(task.recurrence_rule, new Date(), task.weekdays);
     }
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, ...patch } : t));
     withTimeout(supabase.from('tasks').update(patch).eq('id', task.id))
@@ -188,13 +190,29 @@ export default function NidoScreen() {
                         .sort((a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? ''))
               : tasks;
 
-  const total = tasks.length;
-  const doneCount = tasks.filter((t) => t.is_done).length;
-  // "pts / semana": solo tareas completadas dentro de la semana ISO actual
+  // Para no agobiar, mostramos solo las primeras y un botón "Ver más".
+  const LIST_CAP = 4;
+  const visible = expanded ? shown : shown.slice(0, LIST_CAP);
+
+  // Métricas de la semana en curso (lunes→domingo), igual criterio que la tab Hoy.
   const weekStart = getMondayOfWeek(new Date());
-  const ptsWeek = tasks
-    .filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
-    .reduce((sum, t) => sum + (t.points ?? 10), 0);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+  const inThisWeek = (iso: string | null | undefined) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return d >= weekStart && d <= weekEnd;
+  };
+  const weekDoneList = tasks.filter((t) => t.is_done && inThisWeek(t.completed_at));
+  const weekPendingList = tasks.filter((t) => {
+    if (t.is_done) return false;
+    const due = (t as any).due_date;
+    if (!due) return true;                    // pendiente sin fecha → cuenta esta semana
+    const d = new Date(due);
+    return d >= weekStart && d <= weekEnd;     // pendiente con vencimiento esta semana
+  });
+  const weekTasks = weekDoneList.length + weekPendingList.length; // tareas de esta semana
+  const weekDone  = weekDoneList.length;                          // hechas esta semana
+  const ptsWeek   = weekDoneList.reduce((sum, t) => sum + (t.points ?? 10), 0); // puntos
 
   // Reparto: % de tareas hechas por cada persona
   const SHARE_PALETTE = [accent.hex, C.suelo, C.general, C.cena, C.cristales];
@@ -217,9 +235,7 @@ export default function NidoScreen() {
     return { people, total: sum };
   };
 
-  const weekShare = buildShare(
-    tasks.filter((t) => t.is_done && t.completed_at && new Date(t.completed_at) >= weekStart)
-  );
+  const weekShare = buildShare(weekDoneList);
   const allShare = buildShare(tasks);
 
   if (!loaded && loading) {
@@ -288,21 +304,24 @@ export default function NidoScreen() {
           )}
         </View>
 
-        {/* Stats card */}
+        {/* Stats card — semana en curso */}
         <View style={s.statsCard}>
-          <View style={s.statCol}>
-            <Text style={s.statNum}>{total}</Text>
-            <Text style={s.statLabel}>tareas</Text>
-          </View>
-          <View style={s.statDiv} />
-          <View style={s.statCol}>
-            <Text style={s.statNum}>{doneCount}</Text>
-            <Text style={s.statLabel}>hechas</Text>
-          </View>
-          <View style={s.statDiv} />
-          <View style={s.statCol}>
-            <Text style={s.statNum}>{ptsWeek}</Text>
-            <Text style={s.statLabel}>pts / semana</Text>
+          <Text style={s.meterTitle}>Semana</Text>
+          <View style={s.statsRow}>
+            <View style={s.statCol}>
+              <Text style={s.statNum}>{weekTasks}</Text>
+              <Text style={s.statLabel}>tareas</Text>
+            </View>
+            <View style={s.statDiv} />
+            <View style={s.statCol}>
+              <Text style={s.statNum}>{weekDone}</Text>
+              <Text style={s.statLabel}>hechas</Text>
+            </View>
+            <View style={s.statDiv} />
+            <View style={s.statCol}>
+              <Text style={s.statNum}>{ptsWeek}</Text>
+              <Text style={s.statLabel}>puntos</Text>
+            </View>
           </View>
         </View>
 
@@ -312,7 +331,7 @@ export default function NidoScreen() {
             <PressScale
               key={k}
               style={[s.statusPill, statusFilter === k && { backgroundColor: accent.hex, borderColor: accent.hex }]}
-              onPress={() => setStatusFilter(k)}
+              onPress={() => { setStatusFilter(k); setExpanded(false); }}
               scaleTo={0.94}
               accessibilityRole="button"
               accessibilityLabel={k === 'pendiente' ? 'Filtro: por hacer' : k === 'realizada' ? 'Filtro: realizadas' : 'Filtro: todas'}
@@ -346,7 +365,7 @@ export default function NidoScreen() {
               <Text style={s.emptySub}>Añade tareas con el botón de abajo</Text>
             </View>
           )}
-          {shown.map((task, i) => (
+          {visible.map((task, i) => (
             <StaggerItem key={task.id} index={i}>
               <TaskCard
                 task={task}
@@ -357,6 +376,20 @@ export default function NidoScreen() {
               />
             </StaggerItem>
           ))}
+
+          {shown.length > LIST_CAP && (
+            <PressScale
+              style={s.moreBtn}
+              onPress={() => setExpanded(e => !e)}
+              scaleTo={0.96}
+              accessibilityRole="button"
+              accessibilityLabel={expanded ? 'Ver menos tareas' : 'Ver más tareas'}
+            >
+              <Text style={[s.moreText, { color: accent.hex }]}>
+                {expanded ? 'Ver menos' : `Ver más (${shown.length - LIST_CAP})`}
+              </Text>
+            </PressScale>
+          )}
 
           {/* Add task button (ob-opt style) */}
           <PressScale style={s.addBtn} scaleTo={0.98} onPress={openFab} accessibilityRole="button" accessibilityLabel="Añadir tarea">
@@ -389,7 +422,8 @@ const s = StyleSheet.create({
   headerAddBtn: { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
   headerAddBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
 
-  statsCard: { flexDirection: 'row', alignItems: 'center', height: 92, marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line, marginBottom: 16 },
+  statsCard: { marginHorizontal: 20, backgroundColor: C.paperSoft, borderRadius: R.l, borderWidth: 1, borderColor: C.line, marginBottom: 16, paddingHorizontal: 18, paddingVertical: 14, gap: 10 },
+  statsRow: { flexDirection: 'row', alignItems: 'center' },
   statCol: { flex: 1, alignItems: 'center' },
   statDiv: { width: 1, height: 36, backgroundColor: C.line },
   statNum: { fontSize: 24, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.5 },
@@ -415,6 +449,8 @@ const s = StyleSheet.create({
   recurBtnText: { fontSize: 17, fontFamily: FONT },
 
   list: { paddingHorizontal: 20, marginTop: 2 },
+  moreBtn: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 18, marginTop: 2, marginBottom: 4 },
+  moreText: { fontSize: 13.5, fontFamily: FONT, fontWeight: '600', letterSpacing: -0.2 },
   empty: { alignItems: 'center', paddingTop: 40, paddingBottom: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '500', color: C.ink, fontFamily: FONT },
   emptySub: { fontSize: 14, color: C.ink3, marginTop: 4, fontFamily: FONT },

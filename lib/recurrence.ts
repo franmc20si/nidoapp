@@ -1,3 +1,5 @@
+import { getMondayOfWeek, addDays } from './week';
+
 export type RecurrenceRule = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly';
 
 export const RECURRENCE_OPTS: { key: RecurrenceRule; label: string; short: string }[] = [
@@ -95,6 +97,27 @@ export function recurrenceLabel(rule: string | null | undefined): string {
   return RECURRENCE_OPTS.find(o => o.key === rule)?.label ?? '';
 }
 
+/**
+ * Modelo "un ítem por semana" (tab Tareas): al completar o descartar una tarea
+ * SEMANAL o DIARIA no se salta al siguiente día, sino que se aparca hasta el
+ * lunes de la semana siguiente. Así reaparece ese lunes (vía isDueAgain) y queda
+ * visible toda la semana hasta que se marque. Las de intervalo real
+ * (quincenal/mensual/trimestral) mantienen su salto por intervalo.
+ */
+export function nextDueAfterComplete(
+  rule: RecurrenceRule | string,
+  from: Date | string = new Date(),
+  weekdays?: number[] | null,
+): string {
+  if (rule === 'weekly' || rule === 'daily') {
+    const ref = typeof from === 'string' ? new Date(from + 'T12:00:00') : new Date(from);
+    const nextMon = addDays(getMondayOfWeek(ref), 7);
+    nextMon.setHours(12, 0, 0, 0); // mediodía → evita saltos de día por zona horaria
+    return nextMon.toISOString().split('T')[0];
+  }
+  return nextDueDate(rule, from, weekdays);
+}
+
 /** True when a done recurring task should reappear (its next due date is today or past). */
 export function isDueAgain(dueDate: string | null | undefined): boolean {
   if (!dueDate) return false;
@@ -102,4 +125,29 @@ export function isDueAgain(dueDate: string | null | undefined): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return due <= today;
+}
+
+/**
+ * ¿Debe una recurrente COMPLETADA/DESCARTADA volver a "por hacer" ahora?
+ * - Semanal/diaria (modelo "un ítem por semana"): reaparece al EMPEZAR la semana,
+ *   no cada una en su día. Como al completarla se aparca al lunes siguiente
+ *   (due_date = ese lunes, > domingo de esta semana), se queda hecha toda la
+ *   semana en curso y reaparece el lunes. La condición "due_date hasta el domingo
+ *   de esta semana" además sanea datos antiguos anclados a un día concreto
+ *   (miércoles, etc.), que así reaparecen ya desde el lunes.
+ * - Intervalo (quincenal/mensual/trimestral): cuando su fecha real ya venció.
+ */
+export function shouldReappear(
+  rule: RecurrenceRule | string | null | undefined,
+  dueDate: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (rule === 'weekly' || rule === 'daily') {
+    if (!dueDate) return true; // sin fecha aparcada → que vuelva a estar pendiente
+    const due = new Date(dueDate + 'T00:00:00');
+    const sunday = addDays(getMondayOfWeek(now), 6);
+    sunday.setHours(23, 59, 59, 999);
+    return due <= sunday;
+  }
+  return isDueAgain(dueDate);
 }

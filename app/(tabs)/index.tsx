@@ -14,7 +14,7 @@ import { AlertComposer, AlertCards } from '@/components/AlertSystem';
 import NidoSheet from '@/components/NidoSheet';
 import StaggerItem from '@/components/StaggerItem';
 import PressScale from '@/components/PressScale';
-import { isDueAgain, nextDueDate } from '@/lib/recurrence';
+import { shouldReappear } from '@/lib/recurrence';
 import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
@@ -131,7 +131,7 @@ export default function HoyScreen() {
       if (error) throw error;
       const ts: Task[] = (data ?? []) as Task[];
 
-      const toReset = ts.filter(t => t.is_done && t.is_recurring && isDueAgain((t as any).due_date));
+      const toReset = ts.filter(t => t.is_done && t.is_recurring && shouldReappear((t as any).recurrence_rule, (t as any).due_date));
       if (toReset.length > 0) {
         const ids = toReset.map(t => t.id);
         await withTimeout(supabase.from('tasks').update({ is_done: false, due_date: null, completed_by: null, completed_at: null }).in('id', ids));
