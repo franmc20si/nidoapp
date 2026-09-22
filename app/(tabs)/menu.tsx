@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
 import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
+import BasicsSheet from '@/components/BasicsSheet';
 import { showToast } from '@/store/toastStore';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
@@ -84,6 +85,7 @@ export default function MenuScreen() {
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
   const [editing,    setEditing]    = useState<Recipe | 'new' | null>(null);
   const [showDishes, setShowDishes] = useState(false);
+  const [showBasics, setShowBasics] = useState(false);
   const [showShop,   setShowShop]   = useState(false);
 
   // Los sheets se montan siempre (para que BottomSheet anime entrada Y salida).
@@ -260,6 +262,9 @@ export default function MenuScreen() {
           <PressScale style={s.seeDishesBtn} onPress={() => setShowDishes(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Ver todos los platos">
             <Text style={s.seeDishesText}>Ver platos</Text>
           </PressScale>
+          <PressScale style={s.seeDishesBtn} onPress={() => setShowBasics(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Gestionar básicos semanales">
+            <Text style={s.seeDishesText}>Básicos semanales</Text>
+          </PressScale>
           <PressScale style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
             <Text style={[s.shopBtnText, { color: accent.hex }]}>
               🛒 Lista de la compra · Semana {week}
@@ -301,6 +306,12 @@ export default function MenuScreen() {
         onClose={() => setEditing(null)}
         onSave={saveRecipe}
         onDelete={deleteRecipe}
+      />
+
+      <BasicsSheet
+        visible={showBasics}
+        onClose={() => setShowBasics(false)}
+        accent={accent}
       />
 
       <ShoppingListSheet

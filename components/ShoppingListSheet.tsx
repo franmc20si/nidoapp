@@ -14,6 +14,8 @@ import { C, R, FONT } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { withTimeout, readWithRetry } from '@/lib/withTimeout';
 import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
+import { useBasicsStore } from '@/store/basicsStore';
+import { showToast } from '@/store/toastStore';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
 
@@ -126,6 +128,10 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
   const [showAdd,     setShowAdd]     = useState(false);
   const [catFilter,   setCatFilter]   = useState<string | null>(null);
   const listIdRef = useRef<string | null>(null);
+
+  // Básicos semanales (plantilla del hogar) → botón "Añadir básicos"
+  const { basics, loadBasics } = useBasicsStore();
+  useEffect(() => { if (visible && householdId) loadBasics(householdId); }, [visible, householdId]);
 
   // Load state when opening — manual items from Supabase, recipe checked from AsyncStorage
   useEffect(() => {
@@ -298,6 +304,53 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
     }
   };
 
+  // Añadir básicos en bloque — vuelca la plantilla del hogar a la semana actual,
+  // saltando los que ya estén en la lista (por nombre, ignorando mayúsc/acentos).
+  const norm = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const addBasics = async () => {
+    if (!basics.length) return;
+    const present = new Set<string>([
+      ...recipeItems.map(r => norm(r.name)),
+      ...manualItems.map(m => norm(m.name)),
+    ]);
+    const toAdd = basics.filter(b => {
+      const k = norm(b.name);
+      if (present.has(k)) return false;
+      present.add(k); // evita duplicados entre los propios básicos
+      return true;
+    });
+    if (toAdd.length === 0) { showToast('Los básicos ya están en la lista', 'info'); return; }
+
+    const newItems: ManualItem[] = toAdd.map(b => ({
+      id: genId(),
+      name: b.name,
+      amount: b.amount,
+      category: b.category,
+    }));
+    setManualItems(prev => [...prev, ...newItems]);
+
+    if (listIdRef.current) {
+      const { error } = await supabase.from('shopping_items').insert(
+        newItems.map(m => ({
+          id: m.id,
+          list_id: listIdRef.current,
+          name: m.name,
+          unit: m.amount ?? null,
+          category: m.category,
+          is_checked: false,
+        }))
+      );
+      if (error) {
+        // Revertir el optimista si el guardado falló.
+        const ids = new Set(newItems.map(m => m.id));
+        setManualItems(prev => prev.filter(m => !ids.has(m.id)));
+        showToast('No se pudieron añadir los básicos', 'error');
+        return;
+      }
+    }
+    showToast(`${newItems.length} ${newItems.length === 1 ? 'básico añadido' : 'básicos añadidos'} ✓`, 'success');
+  };
+
   // Build merged item list
   const allItems: ShoppingItem[] = [
     ...recipeItems.map((r) => ({
@@ -410,6 +463,13 @@ export default function ShoppingListSheet({ visible, onClose, weekKey, weekLabel
               ))}
             </View>
           ))}
+
+          {/* Añadir básicos — vuelca la plantilla del hogar de una vez */}
+          {!showAdd && basics.length > 0 && (
+            <PressScale style={[sl.addBasicsBtn, { backgroundColor: accent.wash, borderColor: accent.hex + '60' }]} onPress={addBasics} scaleTo={0.98}>
+              <Text style={[sl.addBasicsBtnText, { color: accent.hex }]}>🧺 Añadir básicos ({basics.length})</Text>
+            </PressScale>
+          )}
 
           {/* Add product form */}
           {showAdd ? (
@@ -528,4 +588,6 @@ const sl = StyleSheet.create({
 
   addProductBtn:    { borderWidth: 1.5, borderRadius: R.pill, paddingVertical: 13, alignItems: 'center', marginVertical: 8 },
   addProductBtnText:{ fontSize: 14, fontWeight: '600', fontFamily: FONT },
+  addBasicsBtn:     { borderWidth: 1.5, borderRadius: R.pill, paddingVertical: 13, alignItems: 'center', marginTop: 8, marginBottom: 2 },
+  addBasicsBtnText: { fontSize: 14, fontWeight: '600', fontFamily: FONT },
 });
