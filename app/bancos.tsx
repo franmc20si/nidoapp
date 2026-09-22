@@ -13,6 +13,7 @@ import { monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BankSheet from '@/components/BankSheet';
+import { IconBank } from '@/components/icons';
 
 const money = (n: number) => n.toFixed(2).replace('.', ',');
 
@@ -110,7 +111,7 @@ export default function BancosScreen() {
 
         {banks.length === 0 ? (
           <View style={s.empty}>
-            <Text style={s.emptyEmoji}>🏦</Text>
+            <View style={s.emptyEmoji}><IconBank size={48} color={C.ink3} strokeWidth={1.6} /></View>
             <Text style={s.emptyTitle}>Sin bancos todavía</Text>
             <Text style={s.emptySub}>Añade tus cuentas para asignarlas a cada servicio y ver cuánto gasta cada una</Text>
             <TouchableOpacity style={[s.emptyBtn, { backgroundColor: accent.hex }]} onPress={openNew} activeOpacity={0.8}>

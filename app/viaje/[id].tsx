@@ -16,7 +16,7 @@ import { extractPlaceName, looksLikeUrl, openLink, linkLabel } from '@/lib/maps'
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
-import { IconChevronRight } from '@/components/icons';
+import { IconChevronRight, TripSlotIcon, IconPlane, IconNote } from '@/components/icons';
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -175,7 +175,7 @@ function ItemSheet({
         {formMode === 'edit' ? (
           <Text style={a.eyebrow}>EDITAR SITIO</Text>
         ) : (
-          <Text style={a.eyebrow}>{kindMeta.emoji} {kindMeta.label.toUpperCase()} · {shortDate(selDay)}</Text>
+          <Text style={a.eyebrow}>{kindMeta.label.toUpperCase()} · {shortDate(selDay)}</Text>
         )}
         <Text style={a.title}>
           {formMode === 'edit' ? 'Editar sitio' : (isLodging ? 'Añadir alojamiento' : 'Añadir sitio')}
@@ -346,12 +346,17 @@ const ItemCard = memo(function ItemCard({
           {compact ? (
             <View style={c.metaC}>
               {item.price != null && <Text style={[c.priceC, { color }]}>{money(item.price)}</Text>}
-              {hasNotes && <Text style={c.noteMark}>📝</Text>}
+              {hasNotes && <IconNote size={12} color={C.ink3} strokeWidth={2} />}
             </View>
           ) : (
             <>
               {sub && <Text style={c.sub} numberOfLines={1}>{sub} ↗</Text>}
-              {hasNotes && <Text style={c.note} numberOfLines={1}>📝 {item.notes!.trim()}</Text>}
+              {hasNotes && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <IconNote size={12} color={C.ink3} strokeWidth={2} />
+                  <Text style={c.note} numberOfLines={1}>{item.notes!.trim()}</Text>
+                </View>
+              )}
             </>
           )}
         </View>
@@ -575,7 +580,10 @@ export default function TripDetailScreen() {
         style={[compact ? s.sectionC : s.section, isDropTarget && { ...s.sectionDrop, borderColor: color }]}
       >
         <View style={s.sectionHead}>
-          <Text style={[s.sectionTitle, compact && s.sectionTitleC]}>{k.emoji} {k.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <TripSlotIcon kind={k.key} size={compact ? 15 : 17} color={C.ink} />
+            <Text style={[s.sectionTitle, compact && s.sectionTitleC]}>{k.label}</Text>
+          </View>
           <PressScale style={s.addChip} onPress={() => openAdd(k.key, day)} scaleTo={0.94}>
             <Text style={[s.addChipText, { color }]}>{compact ? '＋' : '＋ Añadir'}</Text>
           </PressScale>
@@ -639,7 +647,10 @@ export default function TripDetailScreen() {
             <Text style={s.backChevron}>‹</Text>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>VIAJE ✈️</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={s.eyebrow}>VIAJE</Text>
+              <IconPlane size={12} color={C.ink3} strokeWidth={2} />
+            </View>
             <Text style={s.title} numberOfLines={1}>{period?.label}</Text>
           </View>
         </View>

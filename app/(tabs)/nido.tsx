@@ -12,7 +12,7 @@ import PressScale from '@/components/PressScale';
 import { AlertCards } from '@/components/AlertSystem';
 import { nextDueAfterComplete, shouldReappear, mondayFirstWeekday } from '@/lib/recurrence';
 import { getMondayOfWeek } from '@/lib/week';
-import { IlluNidoLimpio } from '@/components/icons';
+import { IlluNidoLimpio, IconRepeat } from '@/components/icons';
 import { useNidoStore } from '@/store/nidoStore';
 import TaskEditSheet from '@/components/TaskEditSheet';
 import { showToast } from '@/store/toastStore';
@@ -349,7 +349,7 @@ export default function NidoScreen() {
             accessibilityRole="button"
             accessibilityLabel="Ver tareas recurrentes por semana"
           >
-            <Text style={s.recurBtnText}>🔁</Text>
+            <IconRepeat size={19} color={C.cristales} strokeWidth={2} />
           </PressScale>
         </View>
 

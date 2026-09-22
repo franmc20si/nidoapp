@@ -4,6 +4,14 @@
  * ViewBox: 24×24 unless noted
  */
 import Svg, { Path, Circle, Ellipse, Line, Rect, Polyline, G } from 'react-native-svg';
+import {
+  Carrot, Beef, Fish, Milk, Croissant, Wheat, Container,
+  Droplets, Snowflake, SprayCan, ShoppingBasket,
+  Lightbulb, Flame, Globe, Smartphone, Building, ShieldCheck,
+  Clapperboard, Dumbbell, Package,
+  Sun, Utensils, Coffee, Moon, BedDouble,
+  Plane, House, Landmark, Repeat, StickyNote,
+} from 'lucide-react-native';
 import { C } from '@/constants/theme';
 
 interface IconProps {
@@ -404,3 +412,74 @@ export const CAT_ICONS: Record<string, React.ComponentType<IconProps>> = {
 export function getCatIcon(key: string | null | undefined): React.ComponentType<IconProps> {
   return CAT_ICONS[key ?? ''] ?? CatGeneral;
 }
+
+// ─── GROCERY ICONS (Lucide, minimalistas) ────────────────────────────────────
+// Sustituyen a los emojis de GROCERY_CATS. Único punto de render → cambiar de
+// estilo/librería en el futuro es tocar SOLO este mapa.
+const GROCERY_ICON_MAP: Record<string, React.ComponentType<any>> = {
+  frutas:     Carrot,
+  carnes:     Beef,
+  pescado:    Fish,
+  lacteos:    Milk,
+  panaderia:  Croissant,
+  pasta:      Wheat,
+  conservas:  Container,
+  aceites:    Droplets,
+  congelados: Snowflake,
+  limpieza:   SprayCan,
+  otros:      ShoppingBasket,
+};
+
+export function GroceryIcon({ catKey, size = 20, color = C.ink2, strokeWidth = 2 }: {
+  catKey: string | null | undefined; size?: number; color?: string; strokeWidth?: number;
+}) {
+  const Cmp = GROCERY_ICON_MAP[catKey ?? ''] ?? ShoppingBasket;
+  return <Cmp size={size} color={color} strokeWidth={strokeWidth} />;
+}
+
+// ─── SERVICE ICONS (Lucide) — sustituyen a los emojis de SERVICE_CATS ─────────
+const SERVICE_ICON_MAP: Record<string, React.ComponentType<any>> = {
+  luz:       Lightbulb,
+  agua:      Droplets,
+  gas:       Flame,
+  internet:  Globe,
+  movil:     Smartphone,
+  comunidad: Building,
+  seguro:    ShieldCheck,
+  streaming: Clapperboard,
+  gimnasio:  Dumbbell,
+  otros:     Package,
+};
+
+export function ServiceIcon({ catKey, size = 20, color = C.ink2, strokeWidth = 2 }: {
+  catKey: string | null | undefined; size?: number; color?: string; strokeWidth?: number;
+}) {
+  const Cmp = SERVICE_ICON_MAP[catKey ?? ''] ?? Package;
+  return <Cmp size={size} color={color} strokeWidth={strokeWidth} />;
+}
+
+// ─── SLOT ICONS (Lucide) — franjas de Viajes (Mañana/Comida/Tarde/Cena/Dormir)
+// y de tareas recurrentes (Mañana/Comida/Tarde/Noche). Mapa compartido. ───────
+const SLOT_ICON_MAP: Record<string, React.ComponentType<any>> = {
+  manana: Sun,
+  comida: Utensils,
+  tarde:  Coffee,
+  cena:   Moon,
+  noche:  Moon,
+  dormir: BedDouble,
+};
+
+export function TripSlotIcon({ kind, size = 18, color = C.ink2, strokeWidth = 2 }: {
+  kind: string | null | undefined; size?: number; color?: string; strokeWidth?: number;
+}) {
+  const Cmp = SLOT_ICON_MAP[kind ?? ''] ?? Sun;
+  return <Cmp size={size} color={color} strokeWidth={strokeWidth} />;
+}
+
+// ─── Aliases de iconos sueltos (Lucide) — un único punto para futuros cambios ─
+export const IconPlane   = Plane;
+export const IconHouse   = House;    // 🏠 (casas / servicios)
+export const IconBank    = Landmark; // 🏦 (bancos)
+export const IconRepeat  = Repeat;   // 🔁 (recurrentes)
+export const IconFlame   = Flame;    // 🔥 (racha)
+export const IconNote    = StickyNote; // 📝 (notas)

@@ -14,6 +14,7 @@ import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useBasicsStore } from '@/store/basicsStore';
 import { GROCERY_CATS } from '@/components/ShoppingListSheet';
+import { GroceryIcon } from '@/components/icons';
 import { showToast } from '@/store/toastStore';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
@@ -75,7 +76,7 @@ export default function BasicsSheet({ visible, onClose, accent }: Props) {
 
         {basics.length === 0 && (
           <View style={sl.empty}>
-            <Text style={sl.emptyIcon}>🧺</Text>
+            <View style={sl.emptyIcon}><GroceryIcon catKey="otros" size={44} color={C.ink3} strokeWidth={1.6} /></View>
             <Text style={sl.emptyTitle}>Sin básicos todavía</Text>
             <Text style={sl.emptySub}>
               Añade los productos que compras cada semana{'\n'}(leche, pan, huevos…).{'\n\n'}
@@ -87,7 +88,7 @@ export default function BasicsSheet({ visible, onClose, accent }: Props) {
         {grouped.map(({ cat, items }) => (
           <View key={cat.key} style={sl.section}>
             <View style={sl.sectionHead}>
-              <Text style={sl.sectionEmoji}>{cat.emoji}</Text>
+              <GroceryIcon catKey={cat.key} size={17} color={C.ink3} />
               <Text style={sl.sectionLabel}>{cat.label}</Text>
               <Text style={sl.sectionCount}>{items.length}</Text>
             </View>
@@ -118,7 +119,7 @@ export default function BasicsSheet({ visible, onClose, accent }: Props) {
                   style={[sl.catPill, addCat === c.key && { backgroundColor: accent.hex, borderColor: accent.hex }]}
                   onPress={() => setAddCat(c.key)}
                 >
-                  <Text style={sl.catPillEmoji}>{c.emoji}</Text>
+                  <GroceryIcon catKey={c.key} size={14} color={addCat === c.key ? C.white : C.ink2} />
                   <Text style={[sl.catPillText, addCat === c.key && { color: C.white }]}>
                     {c.label.split(' ')[0]}
                   </Text>

@@ -17,6 +17,7 @@ import { readWithRetry } from '@/lib/withTimeout';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import PressScale from '@/components/PressScale';
 import TaskEditSheet from '@/components/TaskEditSheet';
+import { TripSlotIcon, IconRepeat } from '@/components/icons';
 import AddTaskSheet from '@/components/AddTaskSheet';
 
 // ─── Chip de una tarea recurrente ─────────────────────────────────────────────
@@ -124,7 +125,10 @@ export default function RecurrentesScreen() {
             <Text style={s.backChevron}>‹</Text>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>TU SEMANA 🔁</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={s.eyebrow}>TU SEMANA</Text>
+              <IconRepeat size={12} color={C.ink3} strokeWidth={2} />
+            </View>
             <Text style={s.title}>Recurrentes</Text>
           </View>
         </View>
@@ -142,7 +146,7 @@ export default function RecurrentesScreen() {
             {TIME_SLOTS.map((sl) => (
               <View key={sl.key} style={s.gridRow}>
                 <View style={s.rowHead}>
-                  <Text style={s.rowHeadEmoji}>{sl.emoji}</Text>
+                  <View style={s.rowHeadEmoji}><TripSlotIcon kind={sl.key} size={16} color={C.ink2} /></View>
                   <Text style={s.rowHeadTxt}>{sl.label}</Text>
                 </View>
                 {WEEKDAYS.map((w) => (
@@ -174,7 +178,10 @@ export default function RecurrentesScreen() {
 
             {TIME_SLOTS.map((sl) => (
               <View key={sl.key} style={s.section}>
-                <Text style={s.sectionTitle}>{sl.emoji} {sl.label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                  <TripSlotIcon kind={sl.key} size={16} color={C.ink} />
+                  <Text style={s.sectionTitle}>{sl.label}</Text>
+                </View>
                 {renderCell(selDay, sl.key, false)}
               </View>
             ))}
@@ -210,7 +217,7 @@ export default function RecurrentesScreen() {
 
         {weeklyDaily.length === 0 && others.length === 0 && (
           <View style={s.empty}>
-            <Text style={s.emptyEmoji}>🔁</Text>
+            <View style={s.emptyEmoji}><IconRepeat size={44} color={C.ink3} strokeWidth={1.6} /></View>
             <Text style={s.emptyTitle}>Aún no hay recurrentes</Text>
             <Text style={s.emptySub}>Toca ＋ en un día y franja para crear tu primera tarea regular.</Text>
           </View>
@@ -248,7 +255,7 @@ const s = StyleSheet.create({
   grid: { paddingHorizontal: 16 },
   gridRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   rowHead: { width: 66, alignItems: 'flex-start', justifyContent: 'center', paddingTop: 6 },
-  rowHeadEmoji: { fontSize: 16 },
+  rowHeadEmoji: { alignItems: 'center', justifyContent: 'center' },
   rowHeadTxt: { fontSize: 11, color: C.ink2, fontFamily: FONT, fontWeight: '600', marginTop: 2 },
   col: { flex: 1, alignItems: 'stretch' },
   colHead: { textAlign: 'center', fontSize: 12, fontWeight: '700', color: C.ink2, fontFamily: FONT, paddingVertical: 6 },

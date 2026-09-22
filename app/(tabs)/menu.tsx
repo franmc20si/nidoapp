@@ -12,6 +12,7 @@ import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
 import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import BasicsSheet from '@/components/BasicsSheet';
+import { GroceryIcon } from '@/components/icons';
 import { showToast } from '@/store/toastStore';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
@@ -265,9 +266,10 @@ export default function MenuScreen() {
           <PressScale style={s.seeDishesBtn} onPress={() => setShowBasics(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Gestionar básicos semanales">
             <Text style={s.seeDishesText}>Básicos semanales</Text>
           </PressScale>
-          <PressScale style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
+          <PressScale style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash, flexDirection: 'row', gap: 8 }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
+            <GroceryIcon catKey="otros" size={16} color={accent.hex} />
             <Text style={[s.shopBtnText, { color: accent.hex }]}>
-              🛒 Lista de la compra · Semana {week}
+              Lista de la compra · Semana {week}
               {weekIngredients.length > 0 ? ` (${weekIngredients.length} ingredientes)` : ''}
             </Text>
           </PressScale>
@@ -565,7 +567,7 @@ function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
           {/* existing ingredients */}
           {ingredients.map(ing => (
             <View key={ing.id} style={sh.ingRow}>
-              <Text style={sh.ingEmoji}>{GROCERY_CATS.find(c => c.key === ing.category)?.emoji ?? '🛒'}</Text>
+              <View style={sh.ingEmoji}><GroceryIcon catKey={ing.category} size={18} color={C.ink2} /></View>
               <Text style={sh.ingName}>{ing.name}</Text>
               {ing.amount ? <Text style={sh.ingAmount}>{ing.amount}</Text> : null}
               <TouchableOpacity onPress={() => removeIngredient(ing.id)} style={{ padding: 4 }}>
@@ -599,9 +601,7 @@ function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
                 style={[sh.ingCatBtn, showCatPicker && { borderColor: color }]}
                 onPress={() => setShowCatPicker(v => !v)}
               >
-                <Text style={{ fontSize: 20 }}>
-                  {GROCERY_CATS.find(c => c.key === ingCat)?.emoji ?? '🛒'}
-                </Text>
+                <GroceryIcon catKey={ingCat} size={20} color={C.ink2} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[sh.ingAddBtn, { backgroundColor: color }, !ingName.trim() && { opacity: 0.4 }]}
@@ -621,7 +621,7 @@ function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
                     style={[sh.ingCatGridItem, ingCat === c.key && { backgroundColor: color + '25', borderColor: color }]}
                     onPress={() => { setIngCat(c.key); setShowCatPicker(false); }}
                   >
-                    <Text style={{ fontSize: 20 }}>{c.emoji}</Text>
+                    <GroceryIcon catKey={c.key} size={20} color={C.ink2} />
                     <Text style={sh.ingCatGridLabel} numberOfLines={1}>{c.label.split(' ')[0]}</Text>
                   </TouchableOpacity>
                 ))}
@@ -793,7 +793,7 @@ const sh = StyleSheet.create({
   primaryBtnText: { color: C.paper, fontWeight: '600', fontSize: 16, fontFamily: FONT },
 
   ingRow:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.line },
-  ingEmoji:   { fontSize: 18, width: 26, textAlign: 'center' },
+  ingEmoji:   { width: 26, alignItems: 'center' },
   ingName:    { flex: 1, fontSize: 14, color: C.ink, fontFamily: FONT },
   ingAmount:  { fontSize: 12.5, color: C.ink3, fontFamily: FONT },
   ingAdd:     { marginTop: 10, backgroundColor: C.paperSoft, borderRadius: R.l, padding: 10, marginBottom: 4 },

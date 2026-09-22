@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform
 import { Link, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { C, R, FONT } from '@/constants/theme';
+import { IconNest } from '@/components/icons';
 
 type Screen = 'welcome' | 'login';
 
@@ -37,7 +38,7 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={s.welcomeTop}>
           <View style={s.logoRow}>
-            <Text style={s.logoIcon}>🪺</Text>
+            <IconNest size={28} color={C.brand} />
             <Text style={s.logoWord}>needoo</Text>
           </View>
           <Text style={s.headline}>Tu casa, en orden.{'\n'}Sin discusiones.</Text>
@@ -46,7 +47,7 @@ export default function LoginScreen() {
 
         {/* Illustration */}
         <View style={s.illustWrap}>
-          <Text style={s.illustEmoji}>🪺</Text>
+          <IconNest size={120} color={C.brand} fill={C.brandWash} />
         </View>
 
         {/* CTA */}

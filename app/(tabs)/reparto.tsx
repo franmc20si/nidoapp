@@ -167,8 +167,9 @@ export default function RepartoScreen() {
               <Text style={s.balanceStatus}>{balanceStatus.label}</Text>
               <Text style={s.balanceCap}>{balanceStatus.desc}</Text>
             </View>
-            <View style={s.streakPill}>
-              <Text style={s.streakText}>🔥 {streak}</Text>
+            <View style={[s.streakPill, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+              <AchFlame size={15} />
+              <Text style={s.streakText}>{streak}</Text>
             </View>
           </View>
           <View style={s.stackBar}>

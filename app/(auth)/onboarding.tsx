@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { C, R, FONT } from '@/constants/theme';
 import { NIDO_COLORS } from '@/constants/nidoColors';
-import { IlluNidoLimpio } from '@/components/icons';
+import { IlluNidoLimpio, IconNest } from '@/components/icons';
 import { withTimeout } from '@/lib/withTimeout';
 
 type Step = 'choose' | 'create' | 'join' | 'created';
@@ -108,7 +108,7 @@ export default function OnboardingScreen() {
           {/* Option cards */}
           <TouchableOpacity style={[s.card, s.cardCreate]} onPress={() => setStep('create')} activeOpacity={0.85}>
             <View style={[s.cardIconWrap, { backgroundColor: C.brand }]}>
-              <Text style={s.cardIcon}>🪺</Text>
+              <View style={s.cardIcon}><IconNest size={40} color={C.brand} /></View>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.cardTitle}>Crear un nido</Text>
@@ -306,7 +306,7 @@ const s = StyleSheet.create({
   },
   cardCreate: { borderColor: C.brand + '50', backgroundColor: C.brandWash },
   cardIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  cardIcon:  { fontSize: 22 },
+  cardIcon:  { alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 16, fontWeight: '500', color: C.ink, fontFamily: FONT },
   cardDesc:  { fontSize: 13, color: C.ink3, fontFamily: FONT, marginTop: 2 },
   cardCaret: { fontSize: 22, color: C.ink3 },

@@ -13,6 +13,7 @@ import { Subscription } from '@/types';
 import { SERVICE_CATS, CYCLES, getServiceCat, getCycle, monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import ServiceSheet from '@/components/ServiceSheet';
+import { ServiceIcon, IconHouse, IconBank } from '@/components/icons';
 import { readWithRetry } from '@/lib/withTimeout';
 import { daysUntilNextPayment } from '@/lib/nextPayment';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
@@ -146,10 +147,10 @@ export default function ServiciosScreen() {
           </View>
           <View style={s.actions}>
             <PressScale style={s.iconBtn} onPress={() => router.push('/casas')} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Casas">
-              <Text style={s.iconBtnGlyph}>🏠</Text>
+              <IconHouse size={19} color={C.ink2} strokeWidth={2} />
             </PressScale>
             <PressScale style={s.iconBtn} onPress={() => router.push('/bancos')} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Bancos">
-              <Text style={s.iconBtnGlyph}>🏦</Text>
+              <IconBank size={19} color={C.ink2} strokeWidth={2} />
             </PressScale>
             <PressScale style={[s.addBtn, { backgroundColor: accent.hex }]} onPress={openNew} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir servicio">
               <Text style={s.addBtnText}>+ Añadir</Text>
@@ -225,14 +226,13 @@ export default function ServiciosScreen() {
         {/* Próximos pagos — solo si hay alguno en ≤ 7 días */}
         {upcoming.length > 0 && (
           <View style={s.upcomingCard}>
-            <Text style={s.upcomingTitle}>⏰ Próximos pagos</Text>
+            <Text style={s.upcomingTitle}>Próximos pagos</Text>
             {upcoming.map(sub => {
               const days = daysUntil(sub);
-              const cat  = getServiceCat(sub.category);
               const col  = urgencyColor(days) ?? C.cena;
               return (
                 <PressScale key={sub.id} style={s.upcomingRow} onPress={() => openEdit(sub)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel={`Editar ${sub.name}`}>
-                  <Text style={s.upcomingEmoji}>{cat.emoji}</Text>
+                  <View style={s.upcomingEmoji}><ServiceIcon catKey={sub.category} size={20} color={C.ink2} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.upcomingName}>{sub.name}</Text>
                     <Text style={[s.upcomingDays, { color: col }]}>{daysLabel(days)}</Text>
@@ -247,7 +247,7 @@ export default function ServiciosScreen() {
         {/* Lista por categoría */}
         {subs.length === 0 ? (
           <View style={s.empty}>
-            <Text style={s.emptyEmoji}>🏠</Text>
+            <View style={s.emptyEmoji}><IconHouse size={48} color={C.ink3} strokeWidth={1.6} /></View>
             <Text style={s.emptyTitle}>Sin servicios todavía</Text>
             <Text style={s.emptySub}>Añade la luz, el internet o cualquier gasto fijo del hogar</Text>
             <PressScale style={[s.emptyBtn, { backgroundColor: accent.hex }]} onPress={openNew} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Añadir primer servicio">
@@ -266,7 +266,7 @@ export default function ServiciosScreen() {
             return (
               <View key={catKey} style={s.catSection}>
                 <View style={s.catHeader}>
-                  <Text style={s.catEmoji}>{cat.emoji}</Text>
+                  <View style={s.catEmoji}><ServiceIcon catKey={catKey} size={18} color={C.ink2} /></View>
                   <Text style={s.catLabel}>{cat.label}</Text>
                   <Text style={s.catTotal}>{catTotal.toFixed(2).replace('.', ',')} €/mes</Text>
                 </View>
@@ -292,7 +292,7 @@ export default function ServiciosScreen() {
                           {house ? (
                             <View style={s.subBankWrap}>
                               <View style={[s.subBankDot, { backgroundColor: nidoColorByKey(house.color).hex }]} />
-                              <Text style={s.subBank}>🏠 {house.name}</Text>
+                              <Text style={s.subBank}>{house.name}</Text>
                             </View>
                           ) : null}
                           {bank ? (
@@ -379,7 +379,7 @@ const s = StyleSheet.create({
   upcomingCard:  { marginHorizontal: 20, marginBottom: 14, backgroundColor: C.dangerTint, borderRadius: R.l, borderWidth: 1, borderColor: C.dangerLine, padding: 16 },
   upcomingTitle: { fontSize: 13, fontWeight: '600', color: C.ink, fontFamily: FONT, marginBottom: 12 },
   upcomingRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  upcomingEmoji: { fontSize: 20 },
+  upcomingEmoji: { alignItems: 'center', justifyContent: 'center' },
   upcomingName:  { fontSize: 14, fontWeight: '500', color: C.ink, fontFamily: FONT },
   upcomingDays:  { fontSize: 12, fontFamily: FONT, marginTop: 1 },
   upcomingAmt:   { fontSize: 15, fontWeight: '700', fontFamily: FONT },
@@ -393,7 +393,7 @@ const s = StyleSheet.create({
 
   catSection: { marginHorizontal: 20, marginBottom: 12, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
   catHeader:  { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line, backgroundColor: C.paperSoft },
-  catEmoji:   { fontSize: 17 },
+  catEmoji:   { alignItems: 'center', justifyContent: 'center' },
   catLabel:   { flex: 1, fontSize: 13, fontWeight: '600', color: C.ink2, fontFamily: FONT },
   catTotal:   { fontSize: 12, color: C.ink3, fontFamily: FONT },
 

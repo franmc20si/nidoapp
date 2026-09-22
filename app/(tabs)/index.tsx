@@ -20,6 +20,7 @@ import { recipeCheckKey, migrateRecipeCheckKeys } from '@/lib/shoppingChecks';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import { showToast } from '@/store/toastStore';
 import { getServiceCat } from '@/constants/services';
+import { ServiceIcon, IconNest, IconBell } from '@/components/icons';
 import { nextPaymentDate, daysUntilNextPayment } from '@/lib/nextPayment';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -387,7 +388,7 @@ export default function HoyScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Needoo ${household?.name ?? 'Nuestro nido'}, ajustes`}
           >
-            <Text style={n.nidoChipNest}>🪺</Text>
+            <View style={n.nidoChipNest}><IconNest size={18} color={accent.hex} /></View>
             <Text style={n.nidoChipName}>{household?.name ?? 'Nuestro nido'}</Text>
             <View style={[n.accentDot, { backgroundColor: accent.hex }]} />
             <Text style={n.nidoChipCaret}>›</Text>
@@ -400,7 +401,7 @@ export default function HoyScreen() {
             accessibilityRole="button"
             accessibilityLabel="Crear un aviso"
           >
-            <Text style={n.bellIcon}>🔔</Text>
+            <IconBell size={18} color={bellActive ? C.white : C.ink2} strokeWidth={2.2} />
           </PressScale>
         </View>
 
@@ -536,7 +537,7 @@ export default function HoyScreen() {
                 return (
                   <View key={sub.id} style={n.subRow}>
                     <View style={[n.subIcon, { backgroundColor: cat.tint }]}>
-                      <Text style={n.subEmoji}>{cat.emoji}</Text>
+                      <ServiceIcon catKey={sub.category} size={17} color={cat.color} />
                     </View>
                     <View style={n.subInfo}>
                       <Text style={n.subName}>{sub.name}</Text>
@@ -567,7 +568,7 @@ const n = StyleSheet.create({
 
   chipRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 22, marginBottom: 4 },
   nidoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.line, borderRadius: R.pill, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: C.card },
-  nidoChipNest: { fontSize: 16 },
+  nidoChipNest: { alignItems: 'center', justifyContent: 'center' },
   nidoChipName: { fontSize: 13, fontWeight: '500', color: C.ink, fontFamily: FONT },
   accentDot: { width: 8, height: 8, borderRadius: 4 },
   nidoChipCaret: { fontSize: 14, color: C.ink3, marginLeft: -2 },

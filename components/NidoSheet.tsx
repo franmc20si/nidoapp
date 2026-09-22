@@ -10,6 +10,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { supabase } from '@/lib/supabase';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
+import { IconNest } from '@/components/icons';
 
 interface Props {
   visible: boolean;
@@ -115,7 +116,7 @@ export default function NidoSheet({ visible, onClose }: Props) {
 
           {/* Preview */}
           <View style={[sh.preview, { backgroundColor: accent.wash, borderColor: accent.hex + '30' }]}>
-            <Text style={sh.previewNest}>🪺</Text>
+            <View style={sh.previewNest}><IconNest size={30} color={accent.hex} /></View>
             <View>
               <Text style={[sh.previewName, { color: accent.hex }]}>{household?.name ?? 'Nuestro nido'}</Text>
               <Text style={sh.previewSub}>Color activo: {NIDO_COLORS.find(c => c.key === accentKey)?.label}</Text>
@@ -163,7 +164,7 @@ const sh = StyleSheet.create({
   colorLabel: { width: 40, textAlign: 'center', fontSize: 10, color: C.ink3, fontFamily: FONT },
 
   preview: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: R.l, borderWidth: 1, padding: 16, marginTop: 18 },
-  previewNest: { fontSize: 36 },
+  previewNest: { alignItems: 'center', justifyContent: 'center' },
   previewName: { fontSize: 17, fontWeight: '600', fontFamily: FONT, letterSpacing: -0.3 },
   previewSub: { fontSize: 12, color: C.ink3, fontFamily: FONT, marginTop: 2 },
 

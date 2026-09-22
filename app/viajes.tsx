@@ -7,7 +7,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCalendarioStore } from '@/store/calendarioStore';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
-import { IconChevronRight } from '@/components/icons';
+import { IconChevronRight, IconPlane } from '@/components/icons';
 
 const MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -65,14 +65,17 @@ export default function ViajesScreen() {
             <Text style={s.backChevron}>‹</Text>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>VIAJES ✈️</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={s.eyebrow}>VIAJES</Text>
+              <IconPlane size={12} color={C.ink3} strokeWidth={2} />
+            </View>
             <Text style={s.title}>Tus viajes</Text>
           </View>
         </View>
 
         {trips.length === 0 ? (
           <View style={s.empty}>
-            <Text style={s.emptyEmoji}>✈️</Text>
+            <View style={s.emptyEmoji}><IconPlane size={48} color={C.ink3} strokeWidth={1.6} /></View>
             <Text style={s.emptyTitle}>Aún no hay viajes</Text>
             <Text style={s.emptySub}>Crea un periodo en el calendario y márcalo como “viaje” para planificar tus días aquí</Text>
             <TouchableOpacity style={[s.emptyBtn, { backgroundColor: accent.hex }]} onPress={() => router.back()} activeOpacity={0.85}>

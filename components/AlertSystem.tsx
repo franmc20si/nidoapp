@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { C, R, FONT } from '@/constants/theme';
 import { useAlertStore, Alert } from '@/store/alertStore';
+import { IconBell, IconCalendar } from '@/components/icons';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const MONTHS_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -77,7 +78,7 @@ export function AlertComposer({ onClose }: { onClose: () => void }) {
             style={[c.dateBtn, date ? c.dateBtnSet : null]}
             onPress={() => setShowDatePicker((v) => !v)}
           >
-            <Text style={[c.dateBtnIcon, date ? { color: C.brand } : null]}>📅</Text>
+            <IconCalendar size={15} color={date ? C.brand : C.ink2} strokeWidth={2.2} />
             <Text style={[c.dateBtnText, date ? { color: C.brand } : null]}>
               {date ? fmtDate(date) : 'Cuándo'}
             </Text>
@@ -131,13 +132,13 @@ function AlertCard({ alert }: { alert: Alert }) {
     <Animated.View style={[a.card, { opacity, transform: [{ translateX }] }]}>
       {/* Bell icon */}
       <View style={a.iconWrap}>
-        <Text style={a.iconText}>🔔</Text>
+        <IconBell size={18} color={C.brand} strokeWidth={2.2} />
       </View>
 
       {/* Content */}
       <View style={a.content}>
         <Text style={a.concept} numberOfLines={1}>{alert.concept}</Text>
-        <Text style={a.date}>📅 {fmtDate(alert.date)}</Text>
+        <Text style={a.date}>{fmtDate(alert.date)}</Text>
       </View>
 
       {/* Dismiss */}

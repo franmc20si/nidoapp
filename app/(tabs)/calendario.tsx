@@ -12,7 +12,7 @@ import { useNidoStore } from '@/store/nidoStore';
 import { useCalendarioStore, PeriodInput } from '@/store/calendarioStore';
 import { VacationPeriod } from '@/types';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
-import { IconChevronRight } from '@/components/icons';
+import { IconChevronRight, IconPlane } from '@/components/icons';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
 
@@ -165,7 +165,10 @@ function PeriodSheet({
               accessibilityLabel="Es un viaje"
             >
               <View style={{ flex: 1 }}>
-                <Text style={s.tripTitle}>Es un viaje ✈️</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={s.tripTitle}>Es un viaje</Text>
+                  <IconPlane size={14} color={C.ink2} strokeWidth={2} />
+                </View>
                 <Text style={s.tripHint}>Aparecerá en Viajes con planificación por franjas del día (mañana, comida, tarde, cena y dormir)</Text>
               </View>
               <View style={[s.toggle, isTrip && { backgroundColor: color, borderColor: color }]}>
@@ -244,7 +247,8 @@ function MonthCard({
           {monthPeriods.map((p) => (
             <TouchableOpacity key={p.id} style={s.legendRow} onPress={() => onDayPress(p.start_date, p)} activeOpacity={0.7}>
               <View style={[s.legendDot, { backgroundColor: p.color }]} />
-              <Text style={s.legendLabel} numberOfLines={1}>{p.is_trip ? '✈️ ' : ''}{p.label}</Text>
+              {p.is_trip && <IconPlane size={12} color={C.ink3} strokeWidth={2} />}
+              <Text style={s.legendLabel} numberOfLines={1}>{p.label}</Text>
               <Text style={s.legendRange}>{shortDate(p.start_date)} — {shortDate(p.end_date)}</Text>
             </TouchableOpacity>
           ))}
@@ -350,8 +354,9 @@ export default function CalendarioScreen() {
               <Text style={s.title}>Calendario</Text>
             </View>
             <View style={s.navRow}>
-              <PressScale style={s.tripsBtn} onPress={() => router.push('/viajes')} scaleTo={0.95} hitSlop={8} accessibilityRole="button" accessibilityLabel="Ver viajes">
-                <Text style={s.tripsBtnText}>✈️ Viajes</Text>
+              <PressScale style={[s.tripsBtn, { flexDirection: 'row', alignItems: 'center', gap: 6 }]} onPress={() => router.push('/viajes')} scaleTo={0.95} hitSlop={8} accessibilityRole="button" accessibilityLabel="Ver viajes">
+                <IconPlane size={14} color={C.ink2} strokeWidth={2} />
+                <Text style={s.tripsBtnText}>Viajes</Text>
               </PressScale>
               <PressScale
                 style={[s.navBtn, monthOffset === 0 && s.navBtnDisabled]}
@@ -381,7 +386,7 @@ export default function CalendarioScreen() {
 
           {!pendingStart && periods.length === 0 && (
             <View style={s.hintBar}>
-              <Text style={s.hintText}>Toca el primer y el último día para marcar unas vacaciones o un viaje ✈️</Text>
+              <Text style={s.hintText}>Toca el primer y el último día para marcar unas vacaciones o un viaje</Text>
             </View>
           )}
 
