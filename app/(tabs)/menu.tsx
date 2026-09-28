@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -55,6 +55,9 @@ const cloneHint = Platform.select({ web: { willChange: 'transform' }, default: {
 const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined'
   && !!window.matchMedia?.('(pointer: fine)').matches;
 const LONG_PRESS_MS = 280;
+const IS_WEB = Platform.OS === 'web';
+const EASE_OUT_CSS = 'cubic-bezier(0.23, 1, 0.32, 1)';
+const LAND_MS = 240;
 
 // ─── main screen ───────────────────────────────────────────────────────────
 export default function MenuScreen() {
@@ -199,6 +202,7 @@ export default function MenuScreen() {
   const clearDrag = () => {
     settlingRef.current = false;
     dragRef.current = null; hoverRef.current = null; armedRef.current = null;
+    if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     setDrag(null); setHoverSlot(null); setArmedSlot(null);
     cloneScale.setValue(1); cloneOpacity.setValue(1);
     setDragActiveWeb(false);
@@ -207,6 +211,56 @@ export default function MenuScreen() {
   const clonePosFor = (px: number, py: number) => {
     const o = scrollOff();
     return { x: px - o.x - originRef.current.x - grabRef.current.x, y: py - o.y - originRef.current.y - grabRef.current.y };
+  };
+
+  // ── movimiento del clon ─────────────────────────────────────────────────────
+  // En web, Animated sin driver nativo re-renderiza el componente en cada
+  // setValue → tirones. Allí escribimos el transform directamente en el DOM
+  // (una vez por frame) y animamos "levantar"/aterrizar con transiciones CSS.
+  // El nodo exterior solo traslada; el interior solo escala (transiciones
+  // independientes, así la escala no arrastra retardo al movimiento).
+  const posRef       = useRef({ x: 0, y: 0 });
+  const rafRef       = useRef<number | null>(null);
+  const cloneOuterEl = useRef<HTMLElement | null>(null);
+  const cloneInnerEl = useRef<HTMLElement | null>(null);
+  const writeClonePos = (transition = 'none') => {
+    const el = cloneOuterEl.current;
+    if (!el) return;
+    el.style.transition = transition;
+    el.style.transform = `translate3d(${posRef.current.x}px, ${posRef.current.y}px, 0)`;
+  };
+  const writeCloneScale = (scale: number, ms: number) => {
+    const el = cloneInnerEl.current;
+    if (!el) return;
+    el.style.transition = `transform ${ms}ms ${EASE_OUT_CSS}`;
+    el.style.transform = `scale(${scale})`;
+  };
+  // Refs estables: solo tocan refs, así que no importa que cierren sobre el primer render.
+  const setCloneOuter = useCallback((el: any) => { cloneOuterEl.current = el; if (el) writeClonePos(); }, []);
+  const setCloneInner = useCallback((el: any) => {
+    cloneInnerEl.current = el;
+    if (el) { el.style.transform = 'scale(1)'; requestAnimationFrame(() => writeCloneScale(1.05, 160)); }
+  }, []);
+  const moveClone = (p: { x: number; y: number }) => {
+    posRef.current = p;
+    if (!IS_WEB) { dragPos.setValue(p); return; }
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(() => { rafRef.current = null; writeClonePos(); });
+    }
+  };
+  const landClone = (p: { x: number; y: number }, done: () => void) => {
+    posRef.current = p;
+    if (!IS_WEB) {
+      Animated.parallel([
+        Animated.spring(dragPos, { toValue: p, useNativeDriver: false, speed: 22, bounciness: 3 }),
+        Animated.timing(cloneScale, { toValue: 1, duration: 180, easing: EASE_OUT, useNativeDriver: false }),
+      ]).start(done);
+      return;
+    }
+    if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    writeClonePos(`transform ${LAND_MS}ms ${EASE_OUT_CSS}`);
+    writeCloneScale(1, LAND_MS - 40);
+    setTimeout(done, LAND_MS);
   };
 
   const dragApi: CellDragApi = {
@@ -235,14 +289,17 @@ export default function MenuScreen() {
       const o = scrollOff();
       grabRef.current = z ? { x: g.x0 - o.x - z.x, y: g.y0 - o.y - z.y } : { x: 40, y: 32 };
       dragRef.current = { from: slot, value };
+      // posRef se fija ANTES de montar el clon: su ref callback lo pinta ya en sitio.
+      moveClone(clonePosFor(g.moveX || g.x0, g.moveY || g.y0));
       setDrag({ from: slot, value, w: z?.w ?? 140, h: z?.h ?? 64 });
-      dragPos.setValue(clonePosFor(g.moveX || g.x0, g.moveY || g.y0));
-      cloneOpacity.setValue(1);
-      cloneScale.setValue(1);
-      Animated.spring(cloneScale, { toValue: 1.05, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
+      if (!IS_WEB) {
+        cloneOpacity.setValue(1);
+        cloneScale.setValue(1);
+        Animated.spring(cloneScale, { toValue: 1.05, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
+      }
     },
     onMove: (g) => {
-      dragPos.setValue(clonePosFor(g.moveX, g.moveY));
+      moveClone(clonePosFor(g.moveX, g.moveY));
       const o = scrollOff();
       const k = hitTest(g.moveX - o.x, g.moveY - o.y);
       if (k !== hoverRef.current) { hoverRef.current = k; setHoverSlot(k); }
@@ -263,10 +320,7 @@ export default function MenuScreen() {
         ? { x: z.x - originRef.current.x, y: z.y - originRef.current.y }
         : clonePosFor(g.moveX, g.moveY);
       settlingRef.current = true;
-      Animated.parallel([
-        Animated.spring(dragPos, { toValue: target, useNativeDriver: false, speed: 22, bounciness: 3 }),
-        Animated.timing(cloneScale, { toValue: 1, duration: 180, easing: EASE_OUT, useNativeDriver: false }),
-      ]).start(() => {
+      landClone(target, () => {
         if (ok && household?.id) {
           const hid = household.id, wk = wKey, from = d.from, to = k!;
           swapPlan(hid, wk, from, to);
@@ -275,6 +329,31 @@ export default function MenuScreen() {
         clearDrag();
       });
     },
+  };
+
+  // API estable para las celdas memoizadas: delega en la versión del último
+  // render (plan fresco) sin cambiar de identidad → sobrevolar un hueco solo
+  // repinta las celdas cuyo contenido/estado cambia.
+  const dragApiRef = useRef(dragApi);
+  dragApiRef.current = dragApi;
+  const stableDrag = useRef<CellDragApi>({
+    canStart: (slot) => dragApiRef.current.canStart(slot),
+    arm:      (slot) => dragApiRef.current.arm(slot),
+    disarm:   (slot) => dragApiRef.current.disarm(slot),
+    onStart:  (slot, g) => dragApiRef.current.onStart(slot, g),
+    onMove:   (g) => dragApiRef.current.onMove(g),
+    onEnd:    (g) => dragApiRef.current.onEnd(g),
+  }).current;
+  const openPick = useCallback((slot: string) => {
+    if (justDraggedRef.current) return;
+    const [d, meal] = slot.split('-');
+    setPick({ day: Number(d), meal: meal as Meal });
+  }, []);
+  const cellRefCbs = useRef(new Map<string, (ref: View | null) => void>()).current;
+  const cellRefFor = (slot: string) => {
+    let cb = cellRefCbs.get(slot);
+    if (!cb) { cb = registerCell(slot); cellRefCbs.set(slot, cb); }
+    return cb;
   };
 
   // Vista previa del intercambio mientras se sobrevuela un destino válido.
@@ -393,12 +472,9 @@ export default function MenuScreen() {
                       recipe={recipeById(shownValue(slot))}
                       state={cellState(slot)}
                       label={`${MN_DAYS_LONG[i]}, ${meal}`}
-                      cellRef={registerCell(slot)}
-                      drag={dragApi}
-                      onPress={() => {
-                        if (justDraggedRef.current) return;
-                        setPick({ day: i, meal });
-                      }}
+                      cellRef={cellRefFor(slot)}
+                      drag={stableDrag}
+                      onPress={openPick}
                     />
                   );
                 })}
@@ -429,6 +505,14 @@ export default function MenuScreen() {
       {drag && (() => {
         const r = recipeById(drag.value);
         const ev = !r && drag.value.startsWith('event:') ? drag.value.slice(6) : null;
+        if (IS_WEB) return (
+          // Sin transform en props: lo escribe moveClone/landClone en el DOM.
+          <View ref={setCloneOuter} pointerEvents="none" style={[s.dragCloneWrap, { width: drag.w, height: drag.h }]}>
+            <View ref={setCloneInner} style={[s.cell, s.dragClone, cellColors(r, ev), s.dragCloneFill]}>
+              <CellContent recipe={r} event={ev} />
+            </View>
+          </View>
+        );
         return (
           <Animated.View
             pointerEvents="none"
@@ -519,9 +603,11 @@ function CellContent({ recipe, event }: { recipe?: Recipe; event?: string | null
   return <Text style={s.cellPlus}>+</Text>;
 }
 
-function MealCell({ slot, value, recipe, state, label, cellRef, drag, onPress }: {
+// memo: drag/onPress/cellRef son estables, así que solo re-renderiza la celda
+// cuyo contenido o estado de arrastre cambia.
+const MealCell = memo(function MealCell({ slot, value, recipe, state, label, cellRef, drag, onPress }: {
   slot: string; value?: string; recipe?: Recipe; state: CellState; label: string;
-  cellRef: (ref: View | null) => void; drag: CellDragApi; onPress: () => void;
+  cellRef: (ref: View | null) => void; drag: CellDragApi; onPress: (slot: string) => void;
 }) {
   // PanResponder creado una sola vez; lee slot/drag "vivos" vía ref.
   const latest = useRef({ slot, drag });
@@ -551,7 +637,7 @@ function MealCell({ slot, value, recipe, state, label, cellRef, drag, onPress }:
     <View ref={cellRef} style={s.cellWrap} {...pan.panHandlers}>
       <PressScale
         style={[s.cell, filled && s.cellDraggable, state !== 'source' && cellColors(recipe, event), stateStyle]}
-        onPress={onPress}
+        onPress={() => onPress(slot)}
         onLongPress={() => drag.arm(slot)}
         onPressOut={() => drag.disarm(slot)}
         delayLongPress={LONG_PRESS_MS}
@@ -564,7 +650,7 @@ function MealCell({ slot, value, recipe, state, label, cellRef, drag, onPress }:
       </PressScale>
     </View>
   );
-}
+});
 
 // ─── PickSheet ──────────────────────────────────────────────────────────────
 function PickSheet({ visible, day, meal, recipes, current, onPick, onClose, onNewRecipe }: {
@@ -976,6 +1062,14 @@ const s = StyleSheet.create({
   cellPreview: { opacity: 0.7 },
   cellTarget:  { borderColor: C.ink2, borderStyle: 'dashed' },
   cellBlocked: { opacity: 0.35 },
+  dragCloneWrap: Platform.select({
+    web: { position: 'absolute', top: 0, left: 0, zIndex: 100, willChange: 'transform' },
+    default: { position: 'absolute', top: 0, left: 0, zIndex: 100 },
+  }) as any,
+  dragCloneFill: Platform.select({
+    web: { position: 'relative', top: 0, left: 0, width: '100%', height: '100%', willChange: 'transform' },
+    default: {},
+  }) as any,
   dragClone: {
     position: 'absolute', top: 0, left: 0, flex: 0,
     shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
