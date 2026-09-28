@@ -48,6 +48,7 @@ interface MenuState {
   saveRecipe: (householdId: string, data: Recipe) => Promise<{ ok: boolean }>;
   deleteRecipe: (householdId: string, id: string) => Promise<{ ok: boolean }>;
   assignPlan: (householdId: string, weekKey: string, slot: string, recipeId: string | null) => Promise<void>;
+  swapPlan: (householdId: string, weekKey: string, slotA: string, slotB: string) => Promise<void>;
 }
 
 async function upsertWeekPlan(householdId: string, weekKey: string, plan: Plan) {
@@ -244,6 +245,31 @@ export const useMenuStore = create<MenuState>((set, get) => ({
     } catch (e: any) {
       console.error('[menuStore] assignPlan error', e);
       showToast('No se pudo guardar el menú: ' + (e?.message ?? 'error desconocido'), 'error');
+    } finally {
+      set({ loadingFor: null });
+    }
+  },
+
+  // ── intercambiar dos huecos de la misma semana (arrastrar y soltar) ─────────
+  // Un único upsert: los dos huecos cambian a la vez o ninguno. El conjunto de
+  // platos de la semana no varía → la lista de la compra y sus checks tampoco.
+  swapPlan: async (householdId, weekKey, slotA, slotB) => {
+    if (slotA === slotB) return;
+    const prev = get().weeklyPlans[weekKey] ?? {};
+    const newPlan: Plan = { ...prev };
+    const a = prev[slotA], b = prev[slotB];
+    if (b) newPlan[slotA] = b; else delete newPlan[slotA];
+    if (a) newPlan[slotB] = a; else delete newPlan[slotB];
+    set({ weeklyPlans: { ...get().weeklyPlans, [weekKey]: newPlan }, loadingFor: householdId });
+    try {
+      await upsertWeekPlan(householdId, weekKey, newPlan);
+    } catch (e: any) {
+      console.error('[menuStore] swapPlan error', e);
+      // Rollback: solo si nadie ha tocado la semana entretanto.
+      if (get().weeklyPlans[weekKey] === newPlan) {
+        set({ weeklyPlans: { ...get().weeklyPlans, [weekKey]: prev } });
+      }
+      showToast('No se pudo mover el plato: ' + (e?.message ?? 'error desconocido'), 'error');
     } finally {
       set({ loadingFor: null });
     }

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput,
+  TextInput, Animated, PanResponder, PanResponderGestureState, Platform, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
@@ -45,6 +45,17 @@ function getWeekDays(monday: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
+// ─── arrastrar y soltar platos ─────────────────────────────────────────────
+type Meal = 'comida' | 'cena';
+const mealOf = (slot: string) => slot.split('-')[1] as Meal;
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const cloneHint = Platform.select({ web: { willChange: 'transform' }, default: {} }) as any;
+// Ratón (puntero fino): se arrastra directamente al moverse. Táctil: hay que
+// mantener pulsado primero, para no robarle el gesto al scroll vertical.
+const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined'
+  && !!window.matchMedia?.('(pointer: fine)').matches;
+const LONG_PRESS_MS = 280;
+
 // ─── main screen ───────────────────────────────────────────────────────────
 export default function MenuScreen() {
   const today       = new Date();
@@ -70,7 +81,7 @@ export default function MenuScreen() {
   // Estado compartido (mismo store que la tab Semana → nunca divergen)
   const {
     recipes, weeklyPlans, recipeById,
-    loadMenu, assignPlan,
+    loadMenu, assignPlan, swapPlan,
     saveRecipe: storeSaveRecipe, deleteRecipe: storeDeleteRecipe,
     loaded, loadError,
   } = useMenuStore();
@@ -120,6 +131,168 @@ export default function MenuScreen() {
     setPick(null);
   };
 
+  // ── arrastrar y soltar: intercambia dos huecos de la semana ────────────────
+  // Un plato solo cae donde cabe (sus `meals`) y el desplazado debe caber en el
+  // hueco de origen. Los eventos y los huecos vacíos caben en cualquier sitio.
+  const canPlace = (value: string | undefined, meal: Meal) => {
+    if (!value || value.startsWith('event:')) return true;
+    const r = recipeById(value);
+    return !r || r.meals.includes(meal);
+  };
+  const canSwap = (from: string, to: string) =>
+    from !== to && canPlace(plan[from], mealOf(to)) && canPlace(plan[to], mealOf(from));
+
+  const [drag,      setDrag]      = useState<{ from: string; value: string; w: number; h: number } | null>(null);
+  const [hoverSlot, setHoverSlot] = useState<string | null>(null);
+  const [armedSlot, setArmedSlot] = useState<string | null>(null);
+  const dragPos      = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const cloneScale   = useRef(new Animated.Value(1)).current;
+  const cloneOpacity = useRef(new Animated.Value(1)).current;
+  const rootRef      = useRef<View>(null);
+  const cellRefs     = useRef<Map<string, View>>(new Map());
+  const zonesRef     = useRef<Array<{ key: string; x: number; y: number; w: number; h: number }>>([]);
+  const originRef    = useRef({ x: 0, y: 0 });   // posición en ventana del root (clon absoluto dentro)
+  const grabRef      = useRef({ x: 0, y: 0 });   // punto de agarre dentro de la celda
+  const dragRef      = useRef<{ from: string; value: string } | null>(null);
+  const armedRef     = useRef<string | null>(null);
+  const hoverRef     = useRef<string | null>(null);
+  const settlingRef  = useRef(false);
+  const justDraggedRef = useRef(false);
+
+  const registerCell = (key: string) => (ref: View | null) => {
+    if (ref) cellRefs.current.set(key, ref); else cellRefs.current.delete(key);
+  };
+
+  // Con el scroll bloqueado durante el arrastre, una medición al empezar vale.
+  const measureAll = () => {
+    const zones: typeof zonesRef.current = [];
+    cellRefs.current.forEach((ref, key) => {
+      ref.measureInWindow((x, y, w, h) => { zones.push({ key, x, y, w, h }); });
+    });
+    zonesRef.current = zones;
+    rootRef.current?.measureInWindow((x, y) => { originRef.current = { x, y }; });
+  };
+  // measureInWindow (web) da coords de viewport y el PanResponder de página.
+  const scrollOff = () => (Platform.OS === 'web' && typeof window !== 'undefined')
+    ? { x: window.scrollX || 0, y: window.scrollY || 0 } : { x: 0, y: 0 };
+  const hitTest = (px: number, py: number) => {
+    for (const z of zonesRef.current) {
+      if (px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h) return z.key;
+    }
+    return null;
+  };
+
+  // Web: sin selección de texto durante el arrastre y, en táctil, que el dedo
+  // no haga scroll de la página una vez "levantado" el plato.
+  const blockTouchMove = useRef((e: Event) => { if (e.cancelable) e.preventDefault(); }).current;
+  const setDragActiveWeb = (on: boolean) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const b = document.body.style as any;
+    b.userSelect = on ? 'none' : '';
+    b.webkitUserSelect = on ? 'none' : '';
+    b.cursor = on && FINE_POINTER ? 'grabbing' : '';
+    if (on) document.addEventListener('touchmove', blockTouchMove, { passive: false });
+    else document.removeEventListener('touchmove', blockTouchMove);
+  };
+  useEffect(() => () => setDragActiveWeb(false), []);
+
+  const clearDrag = () => {
+    settlingRef.current = false;
+    dragRef.current = null; hoverRef.current = null; armedRef.current = null;
+    setDrag(null); setHoverSlot(null); setArmedSlot(null);
+    cloneScale.setValue(1); cloneOpacity.setValue(1);
+    setDragActiveWeb(false);
+  };
+
+  const clonePosFor = (px: number, py: number) => {
+    const o = scrollOff();
+    return { x: px - o.x - originRef.current.x - grabRef.current.x, y: py - o.y - originRef.current.y - grabRef.current.y };
+  };
+
+  const dragApi: CellDragApi = {
+    canStart: (slot) => !settlingRef.current && !!plan[slot]
+      && (armedRef.current === slot || FINE_POINTER),
+    arm: (slot) => {
+      if (settlingRef.current || !plan[slot]) return;
+      armedRef.current = slot; setArmedSlot(slot);
+      measureAll();
+      setDragActiveWeb(true);
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined') (navigator as any).vibrate?.(8);
+    },
+    disarm: (slot) => {
+      if (armedRef.current !== slot || dragRef.current) return;
+      armedRef.current = null; setArmedSlot(null);
+      setDragActiveWeb(false);
+    },
+    onStart: (slot, g) => {
+      const value = plan[slot];
+      if (!value) return;
+      if (!armedRef.current) { measureAll(); setDragActiveWeb(true); }
+      justDraggedRef.current = true;
+      // measureInWindow es síncrono en web; en nativo llega en el siguiente
+      // tick, así que el tamaño de la celda cae a unos valores razonables.
+      const z = zonesRef.current.find(zz => zz.key === slot);
+      const o = scrollOff();
+      grabRef.current = z ? { x: g.x0 - o.x - z.x, y: g.y0 - o.y - z.y } : { x: 40, y: 32 };
+      dragRef.current = { from: slot, value };
+      setDrag({ from: slot, value, w: z?.w ?? 140, h: z?.h ?? 64 });
+      dragPos.setValue(clonePosFor(g.moveX || g.x0, g.moveY || g.y0));
+      cloneOpacity.setValue(1);
+      cloneScale.setValue(1);
+      Animated.spring(cloneScale, { toValue: 1.05, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
+    },
+    onMove: (g) => {
+      dragPos.setValue(clonePosFor(g.moveX, g.moveY));
+      const o = scrollOff();
+      const k = hitTest(g.moveX - o.x, g.moveY - o.y);
+      if (k !== hoverRef.current) { hoverRef.current = k; setHoverSlot(k); }
+    },
+    onEnd: (g) => {
+      const d = dragRef.current;
+      setTimeout(() => { justDraggedRef.current = false; }, 350);
+      if (!d) { clearDrag(); return; }
+      const o = scrollOff();
+      const k = hitTest(g.moveX - o.x, g.moveY - o.y);
+      hoverRef.current = null; setHoverSlot(null);
+      const ok = !!k && canSwap(d.from, k);
+      // Destino válido: el clon aterriza en la celda nueva. Si no, vuelve a su
+      // sitio (el "rebote" comunica que ahí no cabe).
+      const landKey = ok ? k! : d.from;
+      const z = zonesRef.current.find(zz => zz.key === landKey);
+      const target = z
+        ? { x: z.x - originRef.current.x, y: z.y - originRef.current.y }
+        : clonePosFor(g.moveX, g.moveY);
+      settlingRef.current = true;
+      Animated.parallel([
+        Animated.spring(dragPos, { toValue: target, useNativeDriver: false, speed: 22, bounciness: 3 }),
+        Animated.timing(cloneScale, { toValue: 1, duration: 180, easing: EASE_OUT, useNativeDriver: false }),
+      ]).start(() => {
+        if (ok && household?.id) {
+          const hid = household.id, wk = wKey, from = d.from, to = k!;
+          swapPlan(hid, wk, from, to);
+          showToast('Plato movido', 'info', { label: 'Deshacer', onPress: () => swapPlan(hid, wk, from, to) });
+        }
+        clearDrag();
+      });
+    },
+  };
+
+  // Vista previa del intercambio mientras se sobrevuela un destino válido.
+  const previewSwap = drag && hoverSlot && canSwap(drag.from, hoverSlot) ? hoverSlot : null;
+  const shownValue = (slot: string) => {
+    if (drag && previewSwap) {
+      if (slot === drag.from)   return plan[previewSwap];
+      if (slot === previewSwap) return plan[drag.from];
+    }
+    return plan[slot];
+  };
+  const cellState = (slot: string): CellState => {
+    if (!drag) return armedSlot === slot ? 'armed' : 'idle';
+    if (slot === previewSwap) return 'target';
+    if (slot === drag.from) return previewSwap ? 'swapped' : 'source';
+    return canSwap(drag.from, slot) ? 'idle' : 'blocked';
+  };
+
   const saveRecipe = async (data: Recipe) => {
     setEditing(null);
     if (!household?.id) return;
@@ -149,6 +322,8 @@ export default function MenuScreen() {
 
   return (
     <SafeAreaView style={s.root}>
+      {/* Marcador del origen de coordenadas del clon (mismo contenedor absoluto) */}
+      <View ref={rootRef} style={StyleSheet.absoluteFill} pointerEvents="none" />
       {/* ─── header ─────────────────────────────────────────────────────── */}
       <View style={s.topbar}>
         <View style={{ flex: 1 }}>
@@ -185,7 +360,11 @@ export default function MenuScreen() {
         </PressScale>
       )}
 
-      <ScrollView alwaysBounceVertical={false} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 32 }}>
+      <ScrollView
+        alwaysBounceVertical={false}
+        scrollEnabled={!drag && !armedSlot}
+        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 32 }}
+      >
         {/* ─── grid ─────────────────────────────────────────────────────── */}
         <View>
           <View style={s.headerRow}>
@@ -195,13 +374,7 @@ export default function MenuScreen() {
           </View>
 
           {days.map((d, i) => {
-            const isToday      = isThisWeek && i === todayDow;
-            const comidaVal    = plan[`${i}-comida`];
-            const cenaVal      = plan[`${i}-cena`];
-            const comidaRecipe = recipeById(comidaVal);
-            const cenaRecipe   = recipeById(cenaVal);
-            const comidaEvent  = !comidaRecipe && comidaVal?.startsWith('event:') ? comidaVal.slice(6) : null;
-            const cenaEvent    = !cenaRecipe && cenaVal?.startsWith('event:') ? cenaVal.slice(6) : null;
+            const isToday = isThisWeek && i === todayDow;
             return (
               <View key={i} style={s.dayRow}>
                 {/* day label */}
@@ -210,49 +383,25 @@ export default function MenuScreen() {
                   <Text style={[s.dayNum,   isToday && { color: C.white }]}>{d.getDate()}</Text>
                 </View>
 
-                {/* comida */}
-                <PressScale
-                  style={[
-                    s.cell,
-                    comidaRecipe
-                      ? { backgroundColor: mixHex(C.paper, comidaRecipe.color, 0.28), borderColor: mixHex(C.paper, comidaRecipe.color, 0.42), borderStyle: 'solid' }
-                      : comidaEvent
-                        ? { backgroundColor: C.white, borderColor: C.line, borderStyle: 'solid' }
-                        : { borderStyle: 'dashed' },
-                  ]}
-                  onPress={() => setPick({ day: i, meal: 'comida' })}
-                  scaleTo={0.96}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${MN_DAYS_LONG[i]}, comida${comidaRecipe ? ': ' + comidaRecipe.name : comidaEvent ? ': ' + comidaEvent : ', añadir'}`}
-                >
-                  {comidaRecipe
-                    ? <Text style={[s.dishName, { color: mixHex(comidaRecipe.color, C.ink, 0.55) }]}>{comidaRecipe.name}</Text>
-                    : comidaEvent
-                      ? <Text style={s.eventCellName}>{comidaEvent}</Text>
-                      : <Text style={s.cellPlus}>+</Text>}
-                </PressScale>
-
-                {/* cena */}
-                <PressScale
-                  style={[
-                    s.cell,
-                    cenaRecipe
-                      ? { backgroundColor: mixHex(C.paper, cenaRecipe.color, 0.28), borderColor: mixHex(C.paper, cenaRecipe.color, 0.42), borderStyle: 'solid' }
-                      : cenaEvent
-                        ? { backgroundColor: C.white, borderColor: C.line, borderStyle: 'solid' }
-                        : { borderStyle: 'dashed' },
-                  ]}
-                  onPress={() => setPick({ day: i, meal: 'cena' })}
-                  scaleTo={0.96}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${MN_DAYS_LONG[i]}, cena${cenaRecipe ? ': ' + cenaRecipe.name : cenaEvent ? ': ' + cenaEvent : ', añadir'}`}
-                >
-                  {cenaRecipe
-                    ? <Text style={[s.dishName, { color: mixHex(cenaRecipe.color, C.ink, 0.55) }]}>{cenaRecipe.name}</Text>
-                    : cenaEvent
-                      ? <Text style={s.eventCellName}>{cenaEvent}</Text>
-                      : <Text style={s.cellPlus}>+</Text>}
-                </PressScale>
+                {(['comida', 'cena'] as const).map(meal => {
+                  const slot = `${i}-${meal}`;
+                  return (
+                    <MealCell
+                      key={meal}
+                      slot={slot}
+                      value={shownValue(slot)}
+                      recipe={recipeById(shownValue(slot))}
+                      state={cellState(slot)}
+                      label={`${MN_DAYS_LONG[i]}, ${meal}`}
+                      cellRef={registerCell(slot)}
+                      drag={dragApi}
+                      onPress={() => {
+                        if (justDraggedRef.current) return;
+                        setPick({ day: i, meal });
+                      }}
+                    />
+                  );
+                })}
               </View>
             );
           })}
@@ -275,6 +424,24 @@ export default function MenuScreen() {
           </PressScale>
         </View>
       </ScrollView>
+
+      {/* Clon flotante del plato mientras se arrastra */}
+      {drag && (() => {
+        const r = recipeById(drag.value);
+        const ev = !r && drag.value.startsWith('event:') ? drag.value.slice(6) : null;
+        return (
+          <Animated.View
+            pointerEvents="none"
+            style={[s.cell, s.dragClone, cloneHint, cellColors(r, ev), {
+              width: drag.w, height: drag.h,
+              opacity: cloneOpacity,
+              transform: [...dragPos.getTranslateTransform(), { scale: cloneScale }],
+            }]}
+          >
+            <CellContent recipe={r} event={ev} />
+          </Animated.View>
+        );
+      })()}
 
       {/* ─── sheets ───────────────────────────────────────────────────────── */}
       <PickSheet
@@ -326,6 +493,76 @@ export default function MenuScreen() {
         householdId={household?.id ?? ''}
       />
     </SafeAreaView>
+  );
+}
+
+// ─── MealCell ───────────────────────────────────────────────────────────────
+type CellState = 'idle' | 'armed' | 'source' | 'swapped' | 'target' | 'blocked';
+interface CellDragApi {
+  canStart: (slot: string) => boolean;
+  arm:      (slot: string) => void;
+  disarm:   (slot: string) => void;
+  onStart:  (slot: string, g: PanResponderGestureState) => void;
+  onMove:   (g: PanResponderGestureState) => void;
+  onEnd:    (g: PanResponderGestureState) => void;
+}
+
+function cellColors(recipe?: Recipe, event?: string | null) {
+  if (recipe) return { backgroundColor: mixHex(C.paper, recipe.color, 0.28), borderColor: mixHex(C.paper, recipe.color, 0.42), borderStyle: 'solid' as const };
+  if (event)  return { backgroundColor: C.white, borderColor: C.line, borderStyle: 'solid' as const };
+  return { borderStyle: 'dashed' as const };
+}
+
+function CellContent({ recipe, event }: { recipe?: Recipe; event?: string | null }) {
+  if (recipe) return <Text style={[s.dishName, { color: mixHex(recipe.color, C.ink, 0.55) }]}>{recipe.name}</Text>;
+  if (event)  return <Text style={s.eventCellName}>{event}</Text>;
+  return <Text style={s.cellPlus}>+</Text>;
+}
+
+function MealCell({ slot, value, recipe, state, label, cellRef, drag, onPress }: {
+  slot: string; value?: string; recipe?: Recipe; state: CellState; label: string;
+  cellRef: (ref: View | null) => void; drag: CellDragApi; onPress: () => void;
+}) {
+  // PanResponder creado una sola vez; lee slot/drag "vivos" vía ref.
+  const latest = useRef({ slot, drag });
+  latest.current = { slot, drag };
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_e, g) =>
+      latest.current.drag.canStart(latest.current.slot) && Math.hypot(g.dx, g.dy) > 6,
+    onPanResponderGrant: (_e, g) => latest.current.drag.onStart(latest.current.slot, g),
+    onPanResponderMove:  (_e, g) => latest.current.drag.onMove(g),
+    onPanResponderRelease:   (_e, g) => latest.current.drag.onEnd(g),
+    onPanResponderTerminate: (_e, g) => latest.current.drag.onEnd(g),
+    onPanResponderTerminationRequest: () => false,
+  })).current;
+
+  const event = !recipe && value?.startsWith('event:') ? value.slice(6) : null;
+  const filled = !!(recipe || event);
+
+  const stateStyle =
+    state === 'source'  ? s.cellSource :
+    state === 'swapped' ? s.cellPreview :
+    state === 'target'  ? s.cellTarget :
+    state === 'blocked' ? s.cellBlocked :
+    state === 'armed'   ? s.cellArmed : null;
+
+  return (
+    <View ref={cellRef} style={s.cellWrap} {...pan.panHandlers}>
+      <PressScale
+        style={[s.cell, filled && s.cellDraggable, state !== 'source' && cellColors(recipe, event), stateStyle]}
+        onPress={onPress}
+        onLongPress={() => drag.arm(slot)}
+        onPressOut={() => drag.disarm(slot)}
+        delayLongPress={LONG_PRESS_MS}
+        scaleTo={0.96}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}${recipe ? ': ' + recipe.name : event ? ': ' + event : ', añadir'}`}
+        accessibilityHint={filled ? 'Mantén pulsado y arrastra para cambiarlo de día' : undefined}
+      >
+        {state === 'source' ? null : <CellContent recipe={recipe} event={event} />}
+      </PressScale>
+    </View>
   );
 }
 
@@ -727,6 +964,23 @@ const s = StyleSheet.create({
   dishName:      { fontSize: 12, fontWeight: '600', lineHeight: 15, letterSpacing: -0.2, textAlign: 'center', fontFamily: FONT },
   eventCellName: { fontSize: 12, fontWeight: '600', lineHeight: 15, letterSpacing: -0.2, textAlign: 'center', fontFamily: FONT, color: C.ink },
   cellPlus: { color: C.ink3, fontSize: 18, lineHeight: 20 },
+
+  // arrastrar y soltar
+  cellWrap: { flex: 1 },
+  cellDraggable: Platform.select({
+    web: { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', cursor: FINE_POINTER ? 'grab' : 'pointer' },
+    default: {},
+  }) as any,
+  cellArmed:   { borderColor: C.ink2, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  cellSource:  { borderStyle: 'dashed', borderColor: C.ink3, backgroundColor: 'transparent' },
+  cellPreview: { opacity: 0.7 },
+  cellTarget:  { borderColor: C.ink2, borderStyle: 'dashed' },
+  cellBlocked: { opacity: 0.35 },
+  dragClone: {
+    position: 'absolute', top: 0, left: 0, flex: 0,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
+    elevation: 10, zIndex: 100,
+  },
 
   bottomBtns: { marginTop: 18, gap: 10 },
   seeDishesBtn: {

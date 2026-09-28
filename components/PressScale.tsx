@@ -16,7 +16,7 @@ interface Props extends Omit<PressableProps, 'style'> {
  * Usa spring sin rebote para que vuelva nítido, y mantiene el estilo (incl.
  * flex) en el propio Pressable para no alterar el layout.
  */
-export default function PressScale({ scaleTo = 0.97, style, children, disabled, ...rest }: Props) {
+export default function PressScale({ scaleTo = 0.97, style, children, disabled, onPressIn, onPressOut, ...rest }: Props) {
   const scale = useRef(new Animated.Value(1)).current;
   const to = (toValue: number) =>
     Animated.spring(scale, { toValue, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
@@ -24,8 +24,8 @@ export default function PressScale({ scaleTo = 0.97, style, children, disabled, 
   return (
     <AnimatedPressable
       disabled={disabled}
-      onPressIn={() => !disabled && to(scaleTo)}
-      onPressOut={() => to(1)}
+      onPressIn={(e) => { if (!disabled) to(scaleTo); onPressIn?.(e); }}
+      onPressOut={(e) => { to(1); onPressOut?.(e); }}
       style={[style, { transform: [{ scale }] }]}
       {...rest}
     >
