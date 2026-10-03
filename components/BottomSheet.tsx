@@ -48,6 +48,11 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       }),
       Animated.timing(scrim, { toValue: open ? 1 : 0, duration, easing: EASE_OUT, useNativeDriver: true }),
     ]).start(({ finished }) => { if (finished && onDone) onDone(); });
+    // Red de seguridad: si la animación se interrumpe (otro render la
+    // reinicia a medias) `finished` llega `false` y `onDone` nunca se
+    // dispara — el Modal se queda montado con el scrim invisible pero
+    // `pointerEvents` activo, bloqueando toda la pantalla para siempre.
+    if (!open && onDone) setTimeout(onDone, duration + 60);
   };
 
   useEffect(() => {
@@ -85,7 +90,10 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
 
   return (
     <Modal visible={render} transparent animationType="none" onRequestClose={onClose}>
-      <AnimatedPressable style={[s.scrim, { opacity: scrim }]} onPress={onClose} />
+      {/* pointerEvents atado a `visible` (no a `render`): así, aunque el Modal
+          siga montado durante/tras la animación de salida, deja de capturar
+          toques en cuanto el sheet deja de estar "abierto" lógicamente. */}
+      <AnimatedPressable style={[s.scrim, { opacity: scrim }]} onPress={onClose} pointerEvents={visible ? 'auto' : 'none'} />
       <KeyboardAvoidingView
         style={s.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
