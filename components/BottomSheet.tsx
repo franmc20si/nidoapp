@@ -38,6 +38,12 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   const heightRef = useRef(SCREEN_H);
   const translateY = useRef(new Animated.Value(SCREEN_H)).current; // px; arranca fuera de pantalla
   const scrim = useRef(new Animated.Value(0)).current;             // 0..1
+  // El mismo gesto que abre el sheet (p.ej. tocar un hueco vacío del menú)
+  // monta el scrim justo donde está el dedo/cursor; el "mouseup"/toque de
+  // ESE gesto aterriza sobre el scrim recién aparecido y lo cierra al
+  // instante — se abre y se cierra en el mismo toque, siempre. Ignoramos el
+  // cierre por scrim durante una ventana breve tras abrir.
+  const openedAtRef = useRef(0);
 
   const animate = (open: boolean, onDone?: () => void) => {
     const duration = reduced ? 0 : open ? ENTER_MS : EXIT_MS;
@@ -56,7 +62,7 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   };
 
   useEffect(() => {
-    if (visible) { setRender(true); animate(true); }
+    if (visible) { openedAtRef.current = Date.now(); setRender(true); animate(true); }
     else if (render) { animate(false, () => setRender(false)); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -93,7 +99,11 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       {/* pointerEvents atado a `visible` (no a `render`): así, aunque el Modal
           siga montado durante/tras la animación de salida, deja de capturar
           toques en cuanto el sheet deja de estar "abierto" lógicamente. */}
-      <AnimatedPressable style={[s.scrim, { opacity: scrim }]} onPress={onClose} pointerEvents={visible ? 'auto' : 'none'} />
+      <AnimatedPressable
+        style={[s.scrim, { opacity: scrim }]}
+        onPress={() => { if (Date.now() - openedAtRef.current < 300) return; onClose(); }}
+        pointerEvents={visible ? 'auto' : 'none'}
+      />
       <KeyboardAvoidingView
         style={s.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
