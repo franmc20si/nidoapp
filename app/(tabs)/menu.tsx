@@ -633,8 +633,12 @@ const MealCell = memo(function MealCell({ slot, value, recipe, state, label, cel
     state === 'blocked' ? s.cellBlocked :
     state === 'armed'   ? s.cellArmed : null;
 
+  // Un hueco vacío nunca puede iniciar un arrastre (canStart/arm exigen que
+  // ya tenga plato). Enganchar aquí el PanResponder no aporta nada y, en
+  // táctil real, compite con el Pressable del botón por el mismo toque —
+  // eso es lo que dejaba la pantalla sin responder al añadir un plato nuevo.
   return (
-    <View ref={cellRef} style={s.cellWrap} {...pan.panHandlers}>
+    <View ref={cellRef} style={s.cellWrap} {...(filled ? pan.panHandlers : {})}>
       <PressScale
         style={[s.cell, filled && s.cellDraggable, state !== 'source' && cellColors(recipe, event), stateStyle]}
         onPress={() => onPress(slot)}
