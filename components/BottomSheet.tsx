@@ -96,13 +96,15 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
 
   return (
     <Modal visible={render} transparent animationType="none" onRequestClose={onClose}>
-      {/* pointerEvents atado a `visible` (no a `render`): así, aunque el Modal
-          siga montado durante/tras la animación de salida, deja de capturar
-          toques en cuanto el sheet deja de estar "abierto" lógicamente. */}
+      {/* pointerEvents atado a `visible` (no a `render`) y puesto en el
+          `style` (no como prop): como prop, Pressable/AnimatedPressable no
+          lo aplica de forma fiable en react-native-web — el elemento se
+          queda con pointer-events:auto aunque ya esté invisible. Así, aunque
+          el Modal siga montado durante/tras la animación de salida, deja de
+          capturar toques en cuanto el sheet deja de estar "abierto". */}
       <AnimatedPressable
-        style={[s.scrim, { opacity: scrim }]}
+        style={[s.scrim, { opacity: scrim, pointerEvents: visible ? 'auto' : 'none' } as any]}
         onPress={() => { if (Date.now() - openedAtRef.current < 300) return; onClose(); }}
-        pointerEvents={visible ? 'auto' : 'none'}
       />
       <KeyboardAvoidingView
         style={s.kav}
