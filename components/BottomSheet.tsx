@@ -40,10 +40,14 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   const scrim = useRef(new Animated.Value(0)).current;             // 0..1
   // El mismo gesto que abre el sheet (p.ej. tocar un hueco vacío del menú)
   // monta el scrim justo donde está el dedo/cursor; el "mouseup"/toque de
-  // ESE gesto aterriza sobre el scrim recién aparecido y lo cierra al
-  // instante — se abre y se cierra en el mismo toque, siempre. Ignoramos el
-  // cierre por scrim durante una ventana breve tras abrir.
-  const openedAtRef = useRef(0);
+  // ESE MISMO gesto aterriza sobre el scrim recién aparecido y lo cierra al
+  // instante — se abre y se cierra en el mismo toque, siempre. Un guardia
+  // por tiempo (Date.now() en un useEffect) no basta: el efecto que lo arma
+  // corre DESPUÉS del commit, y el toque fantasma puede llegar antes. En su
+  // lugar, el scrim nace con pointerEvents:none y solo se "arma" (puede
+  // cerrar) tras un frame pintado de verdad (doble rAF) — cualquier evento
+  // de ese mismo gesto lo atraviesa sin hacer nada.
+  const [scrimArmed, setScrimArmed] = useState(false);
 
   const animate = (open: boolean, onDone?: () => void) => {
     const duration = reduced ? 0 : open ? ENTER_MS : EXIT_MS;
@@ -62,8 +66,16 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   };
 
   useEffect(() => {
-    if (visible) { openedAtRef.current = Date.now(); setRender(true); animate(true); }
-    else if (render) { animate(false, () => setRender(false)); }
+    if (visible) {
+      setScrimArmed(false);
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(() => setScrimArmed(true)); });
+      setRender(true); animate(true);
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+    } else if (render) {
+      setScrimArmed(false);
+      animate(false, () => setRender(false));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
@@ -96,15 +108,15 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
 
   return (
     <Modal visible={render} transparent animationType="none" onRequestClose={onClose}>
-      {/* pointerEvents atado a `visible` (no a `render`) y puesto en el
-          `style` (no como prop): como prop, Pressable/AnimatedPressable no
-          lo aplica de forma fiable en react-native-web — el elemento se
-          queda con pointer-events:auto aunque ya esté invisible. Así, aunque
-          el Modal siga montado durante/tras la animación de salida, deja de
-          capturar toques en cuanto el sheet deja de estar "abierto". */}
+      {/* pointerEvents atado a `visible && scrimArmed` (no a `render`) y
+          puesto en el `style` (no como prop): como prop, Pressable no lo
+          aplica de forma fiable en react-native-web — el elemento se queda
+          con pointer-events:auto aunque ya esté invisible. Así, el scrim no
+          captura nada hasta que de verdad se ha pintado un frame (evita que
+          el propio toque de apertura lo cierre) ni tras cerrarse. */}
       <AnimatedPressable
-        style={[s.scrim, { opacity: scrim, pointerEvents: visible ? 'auto' : 'none' } as any]}
-        onPress={() => { if (Date.now() - openedAtRef.current < 300) return; onClose(); }}
+        style={[s.scrim, { opacity: scrim, pointerEvents: (visible && scrimArmed) ? 'auto' : 'none' } as any]}
+        onPress={onClose}
       />
       <KeyboardAvoidingView
         style={s.kav}
