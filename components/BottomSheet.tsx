@@ -118,10 +118,15 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
         style={[s.scrim, { opacity: scrim, pointerEvents: (visible && scrimArmed) ? 'auto' : 'none' } as any]}
         onPress={onClose}
       />
+      {/* Mismo problema que el scrim: "box-none" como prop no se aplica de
+          forma fiable — este contenedor a pantalla completa se queda
+          bloqueando toda la app mientras el Modal sigue montado (durante o
+          tras cerrarse), aunque su contenido ya esté fuera de pantalla. Va
+          por `style` y se desactiva del todo (ni siquiera box-none) en
+          cuanto deja de estar "abierto" lógicamente. */}
       <KeyboardAvoidingView
-        style={s.kav}
+        style={[s.kav, { pointerEvents: visible ? 'box-none' : 'none' } as any]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        pointerEvents="box-none"
       >
         <Animated.View
           onLayout={(e) => { heightRef.current = e.nativeEvent.layout.height; }}
