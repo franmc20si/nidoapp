@@ -634,7 +634,7 @@ const n = StyleSheet.create({
   compraCard: {
     borderRadius: R.l, borderWidth: 2,
     // Sin fondo propio: rojo semántico sobre el papel de la página (4,7:1, AA).
-    borderColor: C.dangerLine,
+    borderColor: C.danger,
     backgroundColor: 'transparent',
     padding: 16,
   },
