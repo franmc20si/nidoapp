@@ -6,7 +6,7 @@ import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
 import { useGroceryStore, weeklyTotals, spendWeek, parseDay, money } from '@/store/groceryStore';
-import { getMondayOfWeek, addDays, isoWeekNum } from '@/lib/week';
+import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import PressScale from '@/components/PressScale';
@@ -15,7 +15,14 @@ import GrocerySpendSheet from '@/components/GrocerySpendSheet';
 import GroceryStoreSheet from '@/components/GroceryStoreSheet';
 import { GrocerySpend, GroceryStore } from '@/types';
 
-const WEEKS = 12;
+// Rango del gráfico: 12 semanas, ~6 meses (26 semanas) o todo el histórico.
+type Range = '12w' | '26w' | 'all';
+const RANGES: { key: Range; label: string; total: string }[] = [
+  { key: '12w', label: '12 semanas', total: 'Últimas 12 semanas' },
+  { key: '26w', label: '6 meses',    total: 'Últimos 6 meses' },
+  { key: 'all', label: 'Todo',       total: 'Desde el inicio' },
+];
+const WEEK_MS = 7 * 864e5;
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const DAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -31,6 +38,7 @@ export default function SuperScreen() {
   const [spendSheet, setSpendSheet] = useState<{ spend: GrocerySpend | null } | null>(null);
   const [storeSheet, setStoreSheet] = useState<{ store: GroceryStore | null } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [range, setRange] = useState<Range>('12w');
 
   useEffect(() => { if (household?.id) load(household.id); }, [household?.id]);
   useFocusEffect(useCallback(() => { if (household?.id) load(household.id); }, [household?.id]));
@@ -38,13 +46,21 @@ export default function SuperScreen() {
   // El gráfico acaba en la semana actual, o en la elegida si es posterior
   // (desde el menú se puede llegar mirando la semana que viene).
   const endMonday = selMonday > thisMonday ? selMonday : thisMonday;
-  const data = weeklyTotals(spends, endMonday, WEEKS);
-  const selKey = data.find((d) => +d.monday === +selMonday)?.key ?? data[data.length - 1].key;
+  // "Todo": desde el lunes de la compra más antigua (spends va de más reciente a más antigua).
+  const oldest = spends.length ? getMondayOfWeek(parseDay(spends[spends.length - 1].spent_on)) : endMonday;
+  const weeks = range === '12w' ? 12 : range === '26w' ? 26
+    : Math.max(1, Math.round((+endMonday - +oldest) / WEEK_MS) + 1);
+  const data = weeklyTotals(spends, endMonday, weeks);
+  // Desde la fecha (no desde las barras): sigue siendo válida aunque el rango
+  // elegido ya no muestre esa semana.
+  const selKey = weekKey(selMonday);
 
-  // Media: solo desde la primera semana con datos dentro del rango (las
-  // semanas previas a empezar a apuntar no son "semanas sin gasto").
-  const firstIdx = data.findIndex((d) => d.total > 0);
-  const tracked = firstIdx === -1 ? [] : data.slice(firstIdx);
+  // Media: solo semanas TERMINADAS (la actual está a medias y la bajaría) y
+  // desde la primera con datos dentro del rango (las previas a empezar a
+  // apuntar no son "semanas sin gasto").
+  const done = data.filter((d) => d.monday < thisMonday);
+  const firstIdx = done.findIndex((d) => d.total > 0);
+  const tracked = firstIdx === -1 ? [] : done.slice(firstIdx);
   const avg = tracked.length ? tracked.reduce((a, d) => a + d.total, 0) / tracked.length : 0;
 
   const weekSpends = spends.filter((sp) => spendWeek(sp) === selKey);
@@ -103,13 +119,30 @@ export default function SuperScreen() {
 
         {/* Evolución */}
         <View style={s.card}>
+          <View style={s.segment} accessibilityRole="tablist">
+            {RANGES.map((r) => {
+              const on = r.key === range;
+              return (
+                <PressScale
+                  key={r.key}
+                  style={[s.segmentBtn, on && s.segmentBtnOn]}
+                  onPress={() => setRange(r.key)}
+                  scaleTo={0.96}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[s.segmentText, on && s.segmentTextOn]}>{r.label}</Text>
+                </PressScale>
+              );
+            })}
+          </View>
           <View style={s.statsRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.statLabel}>Media semanal</Text>
               <Text style={s.statValue}>{money(avg)} €</Text>
             </View>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={s.statLabel}>Últimas {WEEKS} semanas</Text>
+              <Text style={s.statLabel}>{RANGES.find((r) => r.key === range)!.total}</Text>
               <Text style={s.statValue}>{money(data.reduce((a, d) => a + d.total, 0))} €</Text>
             </View>
           </View>
@@ -221,6 +254,11 @@ const s = StyleSheet.create({
 
   card: { marginHorizontal: 20, marginBottom: 8, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, padding: 18 },
   statsRow:  { flexDirection: 'row', marginBottom: 18 },
+  segment:       { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: C.paper, borderRadius: R.pill, padding: 3, marginBottom: 16 },
+  segmentBtn:    { paddingHorizontal: 14, paddingVertical: 7, borderRadius: R.pill, borderWidth: 1, borderColor: 'transparent' },
+  segmentBtnOn:  { backgroundColor: C.card, borderColor: C.line },
+  segmentText:   { fontSize: 13, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
+  segmentTextOn: { color: C.ink },
   statLabel: { fontSize: 11, letterSpacing: 0.4, color: C.ink3, fontFamily: FONT, fontWeight: '600', textTransform: 'uppercase' },
   statValue: { fontSize: 24, fontWeight: '600', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 4 },
   chartHint: { fontSize: 11.5, color: C.ink3, fontFamily: FONT, textAlign: 'center', marginTop: 10 },
