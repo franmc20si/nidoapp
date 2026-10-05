@@ -63,6 +63,7 @@ function urgencyColor(days: number | null): string {
 const fmt = (n: number) => n.toFixed(2).replace('.', ',') + ' €';
 
 const DAYS_SHORT  = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const WEEK_DAYS_LC = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']; // lunes primero
 const MONTHS      = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DAYS_LONG   = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -102,8 +103,10 @@ export default function HoyScreen() {
   const { weeklyPlans, recipeById, loadMenu } = useMenuStore();
   const todayPlan   = weeklyPlans[weekKey(new Date())] ?? {};
   const todayDow    = (new Date().getDay() + 6) % 7;
-  const todayComida = todayPlan[`${todayDow}-comida`];
-  const todayCena   = todayPlan[`${todayDow}-cena`];
+  // Día de la tira semanal cuyo menú se enseña (por defecto, hoy).
+  const [selDow, setSelDow] = useState(todayDow);
+  const selComida = todayPlan[`${selDow}-comida`];
+  const selCena   = todayPlan[`${selDow}-cena`];
 
   useEffect(() => { if (household?.id) loadAccent(household.id); }, [household?.id]);
   useEffect(() => { if (household?.id) loadMenu(household.id); }, [household?.id]);
@@ -437,36 +440,54 @@ export default function HoyScreen() {
 
         {/* Week strip */}
         <View style={n.weekStrip}>
-          {days.map((d, i) => (
-            <View key={i} style={n.weekDayWrap}>
-              <Text style={[n.weekLabel, d.isToday && n.weekLabelOn]}>{d.label}</Text>
-              <View style={[n.weekNum, d.isToday && { backgroundColor: accent.hex, borderColor: accent.hex }]}>
-                <Text style={[n.weekNumText, d.isToday && n.weekNumTextOn]}>{d.num}</Text>
-              </View>
-              <View style={[n.weekDot, { backgroundColor: accent.hex, opacity: d.isToday ? 1 : 0 }]} />
-            </View>
-          ))}
+          {days.map((d, i) => {
+            // Hoy: relleno + puntito (siempre). Otro día elegido: solo aro rojo.
+            const picked = i === selDow && !d.isToday;
+            return (
+              <PressScale
+                key={i}
+                style={n.weekDayWrap}
+                onPress={() => setSelDow(i)}
+                scaleTo={0.92}
+                accessibilityRole="button"
+                accessibilityState={{ selected: i === selDow }}
+                accessibilityLabel={`Ver el menú del ${WEEK_DAYS_LC[i]} ${d.num}`}
+              >
+                <Text style={[n.weekLabel, (d.isToday || picked) && n.weekLabelOn]}>{d.label}</Text>
+                <View style={[n.weekNum, d.isToday && { backgroundColor: accent.hex, borderColor: accent.hex }, picked && n.weekNumPicked]}>
+                  <Text style={[n.weekNumText, d.isToday && n.weekNumTextOn]}>{d.num}</Text>
+                </View>
+                <View style={[n.weekDot, { backgroundColor: accent.hex, opacity: d.isToday ? 1 : 0 }]} />
+              </PressScale>
+            );
+          })}
         </View>
 
-        {/* Menú de hoy */}
-        {(todayComida || todayCena) && (() => {
-          const comida = recipeById(todayComida);
-          const cena   = recipeById(todayCena);
+        {/* Menú del día elegido en la tira (hoy por defecto). Hoy sin nada
+            planificado → no se muestra; otro día elegido → siempre, con "—". */}
+        {(selComida || selCena || selDow !== todayDow) && (() => {
+          const comida = recipeById(selComida);
+          const cena   = recipeById(selCena);
+          // Los huecos pueden ser un evento ("event:Cumpleaños") en vez de receta.
+          const label = (v?: string, r?: { name: string }) =>
+            r ? r.name : v?.startsWith('event:') ? v.slice(6) : '—';
           return (
             <StaggerItem index={0}>
             <View style={n.menuCard}>
-              <Text style={n.menuLabel}>MENÚ DE HOY</Text>
+              <Text style={n.menuLabel}>
+                {selDow === todayDow ? 'MENÚ DE HOY' : `MENÚ DEL ${WEEK_DAYS_LC[selDow]} ${days[selDow].num}`}
+              </Text>
               <View style={n.menuCols}>
                 <View style={[n.menuCol, comida && { backgroundColor: mixHex(C.paper, comida.color, 0.22), borderColor: mixHex(C.paper, comida.color, 0.4) }]}>
                   <Text style={n.menuSlot}>Comida</Text>
                   <Text style={[n.menuDish, comida && { color: mixHex(comida.color, C.ink, 0.55) }]} numberOfLines={2}>
-                    {comida ? comida.name : '—'}
+                    {label(selComida, comida)}
                   </Text>
                 </View>
                 <View style={[n.menuCol, cena && { backgroundColor: mixHex(C.paper, cena.color, 0.22), borderColor: mixHex(C.paper, cena.color, 0.4) }]}>
                   <Text style={n.menuSlot}>Cena</Text>
                   <Text style={[n.menuDish, cena && { color: mixHex(cena.color, C.ink, 0.55) }]} numberOfLines={2}>
-                    {cena ? cena.name : '—'}
+                    {label(selCena, cena)}
                   </Text>
                 </View>
               </View>
@@ -609,6 +630,7 @@ const n = StyleSheet.create({
   weekNum: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   weekNumText: { fontSize: 14, fontWeight: '600', color: C.ink, fontFamily: FONT },
   weekNumTextOn: { color: C.white },
+  weekNumPicked: { borderColor: C.danger, borderWidth: 2 },
   weekDot: { width: 5, height: 5, borderRadius: 3 },
 
   menuCard: { marginHorizontal: 20, marginBottom: 14 },
@@ -632,7 +654,7 @@ const n = StyleSheet.create({
 
   // Falta por comprar
   compraCard: {
-    borderRadius: R.l, borderWidth: 2,
+    borderRadius: R.l, borderWidth: 1,
     // Sin fondo propio: rojo semántico sobre el papel de la página (4,7:1, AA).
     borderColor: C.danger,
     backgroundColor: 'transparent',
