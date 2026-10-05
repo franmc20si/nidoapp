@@ -528,7 +528,7 @@ export default function HoyScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Marcar ${item.name} como comprado`}
                   >
-                    <View style={[n.itemCheck, { borderColor: C.compra }]} />
+                    <View style={[n.itemCheck, { borderColor: C.danger }]} />
                     <Text style={n.itemName} numberOfLines={1}>
                       {item.name}
                       {item.unit ? <Text style={n.itemUnit}>  {item.unit}</Text> : null}
