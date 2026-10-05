@@ -6,8 +6,9 @@ import { router, useFocusEffect } from 'expo-router';
 import { C, R, FONT } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { useNidoStore } from '@/store/nidoStore';
-import { useMenuStore } from '@/store/menuStore';
-import { weekKey } from '@/lib/week';
+import { useMenuStore, weekIngredients } from '@/store/menuStore';
+import { weekKey, isoWeekNum } from '@/lib/week';
+import ShoppingListSheet from '@/components/ShoppingListSheet';
 import { supabase } from '@/lib/supabase';
 import { Task, Subscription } from '@/types';
 import { AlertComposer, AlertCards } from '@/components/AlertSystem';
@@ -92,6 +93,7 @@ export default function HoyScreen() {
   const [upcomingSubs, setUpcomingSubs]  = useState<Subscription[]>([]);
   const [bellActive, setBellActive]      = useState(false);
   const [nidoSheetVisible, setNidoSheetVisible] = useState(false);
+  const [showShop, setShowShop]          = useState(false);
   const [refreshing, setRefreshing]      = useState(false);
   const [loading, setLoading]            = useState(true);
   const [loaded, setLoaded]              = useState(false);
@@ -406,6 +408,17 @@ export default function HoyScreen() {
         </View>
 
         <NidoSheet visible={nidoSheetVisible} onClose={() => setNidoSheetVisible(false)} />
+        {/* Lista de la compra completa de esta semana (la misma que en Menú).
+            Al cerrar se recarga "Falta por comprar" con lo marcado dentro. */}
+        <ShoppingListSheet
+          visible={showShop}
+          onClose={() => { setShowShop(false); fetchShopping(); }}
+          weekKey={weekKey(new Date())}
+          weekLabel={`Semana ${isoWeekNum(new Date())}`}
+          recipeItems={weekIngredients(weekPlan, recipeById)}
+          accent={accent}
+          householdId={household?.id ?? ''}
+        />
 
         {/* Date hero */}
         <View style={n.dateHero}>
@@ -486,11 +499,17 @@ export default function HoyScreen() {
           <View style={n.compraCard}>
             <View style={n.cardHeaderRow}>
               <Text style={[n.cardLabel, { color: C.compra }]}>FALTA POR COMPRAR</Text>
-              {pendingItems.length > 0 && (
-                <View style={[n.badge, { backgroundColor: C.compra }]}>
-                  <Text style={n.badgeText}>{pendingItems.length}</Text>
-                </View>
-              )}
+              <PressScale
+                style={[n.shopBtn, { backgroundColor: C.compra }]}
+                onPress={() => setShowShop(true)}
+                scaleTo={0.95}
+                accessibilityRole="button"
+                accessibilityLabel={`${pendingItems.length} por comprar. Abrir la lista de la compra completa`}
+              >
+                <Text style={n.shopBtnText}>
+                  {pendingItems.length > 0 ? `${pendingItems.length} / ` : ''}Lista completa
+                </Text>
+              </PressScale>
             </View>
             {pendingItems.length === 0 ? (
               <Text style={n.cardEmpty}>✓  Lista completa esta semana</Text>
@@ -620,8 +639,8 @@ const n = StyleSheet.create({
   },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   cardLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontFamily: FONT, fontWeight: '600' },
-  badge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: C.white, fontSize: 12, fontWeight: '600', fontFamily: FONT },
+  shopBtn: { height: 32, paddingHorizontal: 14, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center' },
+  shopBtnText: { color: C.white, fontSize: 12.5, fontWeight: '600', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
   itemScroll: { maxHeight: 99 }, // 3 filas exactas (33px c/u) para no cortar el check de la última
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 7 },

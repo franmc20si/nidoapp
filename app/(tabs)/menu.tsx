@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
 import { useNidoStore } from '@/store/nidoStore';
 import { useAuthStore } from '@/store/authStore';
-import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
+import { useMenuStore, Recipe, DISH_COLORS, weekIngredients as computeWeekIngredients } from '@/store/menuStore';
 import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import BasicsSheet from '@/components/BasicsSheet';
@@ -127,21 +127,7 @@ export default function MenuScreen() {
   useEffect(() => { if (editing) setEditKey((k) => k + 1); }, [editing]);
 
   // ── compute ingredient list for this week ──────────────────────────────
-  const weekIngredients = (() => {
-    const seen = new Set<string>();
-    const result: { name: string; amount?: string; category: string; recipeColor: string; recipeName: string; recipeId: string; ingredientId: string }[] = [];
-    Object.values(plan).forEach(rid => {
-      const recipe = recipeById(rid);
-      if (!recipe?.ingredients?.length) return;
-      recipe.ingredients.forEach(ing => {
-        const key = `${ing.name.toLowerCase()}|${ing.category}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        result.push({ name: ing.name, amount: ing.amount, category: ing.category, recipeColor: recipe.color, recipeName: recipe.name, recipeId: recipe.id, ingredientId: ing.id });
-      });
-    });
-    return result;
-  })();
+  const weekIngredients = computeWeekIngredients(plan, recipeById);
 
   const assign = (rid: string | null) => {
     if (!pick || !household?.id) return;

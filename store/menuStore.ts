@@ -51,6 +51,29 @@ interface MenuState {
   swapPlan: (householdId: string, weekKey: string, slotA: string, slotB: string) => Promise<void>;
 }
 
+// Ingredientes de las recetas del plan de una semana, sin duplicados (mismo
+// nombre + categoría cuenta una vez). Es la parte "de receta" de la lista de la
+// compra: la usan la tab Menú y la tab Semana para abrir el mismo sheet.
+export type WeekIngredient = {
+  name: string; amount?: string; category: string;
+  recipeColor: string; recipeName: string; recipeId: string; ingredientId: string;
+};
+export function weekIngredients(plan: Plan, recipeById: (id?: string) => Recipe | undefined): WeekIngredient[] {
+  const seen = new Set<string>();
+  const result: WeekIngredient[] = [];
+  Object.values(plan).forEach(rid => {
+    const recipe = recipeById(rid);
+    if (!recipe?.ingredients?.length) return;
+    recipe.ingredients.forEach(ing => {
+      const key = `${ing.name.toLowerCase()}|${ing.category}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push({ name: ing.name, amount: ing.amount, category: ing.category, recipeColor: recipe.color, recipeName: recipe.name, recipeId: recipe.id, ingredientId: ing.id });
+    });
+  });
+  return result;
+}
+
 async function upsertWeekPlan(householdId: string, weekKey: string, plan: Plan) {
   await writeWithTimeout(() => supabase.from('meal_plans').upsert(
     { household_id: householdId, week_key: weekKey, plan, updated_at: new Date().toISOString() },
