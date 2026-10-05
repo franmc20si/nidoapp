@@ -104,8 +104,12 @@ export default function MenuScreen() {
   useEffect(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]);
   useFocusEffect(useCallback(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]));
   const [showSpend, setShowSpend] = useState(false);
-  // En pantallas estrechas "+ Gasto" pasa a icono para no comerse el rango de la semana.
-  const compactHeader = useWindowDimensions().width < 520;
+  // Pantallas estrechas: el rango de la semana se queda en "05 – 11" (el mes ya
+  // va en el eyebrow) para que quepa "+ Gasto" completo. Solo en móviles muy
+  // estrechos el botón pasa a icono.
+  const winWidth = useWindowDimensions().width;
+  const compactHeader = winWidth < 520;
+  const tinyHeader = winWidth < 360;
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
@@ -417,7 +421,7 @@ export default function MenuScreen() {
       {/* ─── header ─────────────────────────────────────────────────────── */}
       <View style={s.topbar}>
         <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow}>{monthLabel} / Semana {week}</Text>
+          <Text style={s.eyebrow} numberOfLines={1}>{compactHeader ? `${monthLabel} · S${week}` : `${monthLabel} / Semana ${week}`}</Text>
 
           {/* Navigation row */}
           <View style={s.navRow}>
@@ -427,9 +431,9 @@ export default function MenuScreen() {
 
             <Text style={s.rangeText} numberOfLines={1}>
               {!compactHeader && <Text style={{ color: dim }}>del </Text>}
-              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[0].toUpperCase()} {String(first.getDate()).padStart(2,'0')}</Text>
+              <Text style={s.rangeStrong}>{compactHeader ? '' : MN_DAYS_SHORT[0].toUpperCase() + ' '}{String(first.getDate()).padStart(2,'0')}</Text>
               <Text style={{ color: dim }}>{compactHeader ? ' – ' : ' al '}</Text>
-              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[6].toUpperCase()} {String(last.getDate()).padStart(2,'0')}</Text>
+              <Text style={s.rangeStrong}>{compactHeader ? '' : MN_DAYS_SHORT[6].toUpperCase() + ' '}{String(last.getDate()).padStart(2,'0')}</Text>
             </Text>
 
             <PressScale style={s.navBtn} onPress={() => setOffset(o => o + 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana siguiente">
@@ -439,8 +443,8 @@ export default function MenuScreen() {
         </View>
 
         <View style={s.topActions}>
-          <PressScale style={[s.addSpendBtn, compactHeader && s.addSpendBtnIcon, { borderColor: accent.hex }]} onPress={() => setShowSpend(true)} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir gasto del súper">
-            {compactHeader
+          <PressScale style={[s.addSpendBtn, tinyHeader && s.addSpendBtnIcon, { borderColor: accent.hex }]} onPress={() => setShowSpend(true)} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir gasto del súper">
+            {tinyHeader
               ? <IconReceipt size={18} color={accent.hex} strokeWidth={2} />
               : <Text style={[s.addSpendBtnText, { color: accent.hex }]}>+ Gasto</Text>}
           </PressScale>
