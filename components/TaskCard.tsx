@@ -44,6 +44,7 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onSwi
   const opacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
   const checkScale = useRef(new Animated.Value(1)).current;
+  const swipeBgOpacity = translateX.interpolate({ inputRange: [-40, 0], outputRange: [1, 0], extrapolate: 'clamp' });
 
   // Subtle press feedback — buttons must feel like they hear the tap.
   const spring = (val: Animated.Value, toValue: number) =>
@@ -87,10 +88,15 @@ export default function TaskCard({ task, onToggle, onAnimatedOut, onPress, onSwi
 
   return (
     <View style={s.wrap}>
-      <View style={s.swipeBg} pointerEvents="none">
-        <Text style={s.swipeText}>Descartar</Text>
-        <Text style={s.swipeIcon}>✓</Text>
-      </View>
+      {/* Solo si la tarjeta admite swipe, y visible solo al arrastrar a la
+          izquierda: en reposo las tarjetas hechas son translúcidas (s.done) y
+          al completar se desplazan a la derecha — en ambos casos asomaba. */}
+      {onSwipe && (
+        <Animated.View style={[s.swipeBg, { opacity: swipeBgOpacity }]} pointerEvents="none">
+          <Text style={s.swipeText}>Descartar</Text>
+          <Text style={s.swipeIcon}>✓</Text>
+        </Animated.View>
+      )}
       <Animated.View
         {...(onSwipe ? pan.panHandlers : {})}
         style={[
