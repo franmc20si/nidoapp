@@ -24,9 +24,10 @@ const SUGGESTED = [
   { name: 'Frutería', color: 'bosque' },
 ];
 
-function dayLabel(day: string, today: string, yesterday: string) {
+function dayLabel(day: string, today: string, yesterday: string, tomorrow: string) {
   if (day === today) return 'Hoy';
   if (day === yesterday) return 'Ayer';
+  if (day === tomorrow) return 'Mañana';
   const d = parseDay(day);
   return `${DAY_SHORT[d.getDay()]} ${d.getDate()}`;
 }
@@ -71,9 +72,11 @@ export default function GrocerySpendSheet({ visible, spend: spendProp, onClose }
   const now = new Date();
   const today = toDay(now);
   const yesterday = toDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-  // Últimos 7 días; si se edita una compra más antigua, su fecha va al final.
-  const days = Array.from({ length: 7 }, (_, i) => toDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)));
-  if (!days.includes(day)) days.push(day);
+  const tomorrow = toDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  // Solo Ayer / Hoy / Mañana. Si se edita una compra de otro día, su fecha
+  // aparece también (delante) para que se vea cuál tiene y se pueda conservar.
+  const days = [yesterday, today, tomorrow];
+  if (!days.includes(day)) days.unshift(day);
 
   useEffect(() => {
     if (!visible) return;
@@ -227,7 +230,7 @@ export default function GrocerySpendSheet({ visible, spend: spendProp, onClose }
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                 >
-                  <Text style={[s.chipText, on && { color: C.white, fontWeight: '600' }]}>{dayLabel(d, today, yesterday)}</Text>
+                  <Text style={[s.chipText, on && { color: C.white, fontWeight: '600' }]}>{dayLabel(d, today, yesterday, tomorrow)}</Text>
                 </PressScale>
               );
             })}
