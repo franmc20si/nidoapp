@@ -24,12 +24,6 @@ import { getServiceCat } from '@/constants/services';
 import { ServiceIcon, IconNest, IconBell } from '@/components/icons';
 import { nextPaymentDate, daysUntilNextPayment } from '@/lib/nextPayment';
 
-// Colores propios de la tarjeta "Falta por comprar". Pareja elegida por
-// contraste: el naranja sobre este fondo da 5,2:1 (WCAG AA pide ≥ 4,5:1 para
-// texto pequeño; el #FF7A00 original sobre #F3D8A1 se quedaba en 1,9:1).
-const COMPRA_BG     = '#F8E6C0';
-const COMPRA_ACCENT = '#9A4700';
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 function mixHex(a: string, b: string, t: number) {
   const hex = (h: string): [number, number, number] => {
@@ -504,7 +498,7 @@ export default function HoyScreen() {
         <View style={n.sectionGap}>
           <View style={n.compraCard}>
             <View style={n.cardHeaderRow}>
-              <Text style={[n.cardLabel, { color: COMPRA_ACCENT }]}>
+              <Text style={[n.cardLabel, { color: C.danger }]}>
                 FALTA POR COMPRAR{pendingItems.length > 0 ? ` (${pendingItems.length})` : ''}
               </Text>
               <PressScale
@@ -639,14 +633,15 @@ const n = StyleSheet.create({
   // Falta por comprar
   compraCard: {
     borderRadius: R.l, borderWidth: 1,
-    borderColor: C.compra + '40',
-    backgroundColor: COMPRA_BG,
+    // Sin fondo propio: rojo semántico sobre el papel de la página (4,7:1, AA).
+    borderColor: C.dangerLine,
+    backgroundColor: 'transparent',
     padding: 16,
   },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   cardLabel: { fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', fontFamily: FONT, fontWeight: '600' },
-  shopBtn: { height: 32, paddingHorizontal: 14, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: COMPRA_ACCENT, backgroundColor: 'transparent' },
-  shopBtnText: { color: COMPRA_ACCENT, fontSize: 12.5, fontWeight: '600', fontFamily: FONT },
+  shopBtn: { height: 32, paddingHorizontal: 14, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.danger, backgroundColor: 'transparent' },
+  shopBtnText: { color: C.danger, fontSize: 12.5, fontWeight: '600', fontFamily: FONT },
   cardEmpty: { fontSize: 13, color: C.ink2, fontFamily: FONT, paddingVertical: 2 },
   itemScroll: { maxHeight: 99 }, // 3 filas exactas (33px c/u) para no cortar el check de la última
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 7 },
