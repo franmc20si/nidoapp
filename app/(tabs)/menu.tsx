@@ -104,12 +104,12 @@ export default function MenuScreen() {
   useEffect(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]);
   useFocusEffect(useCallback(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]));
   const [showSpend, setShowSpend] = useState(false);
-  // Pantallas estrechas: el rango de la semana se queda en "05 – 11" (el mes ya
-  // va en el eyebrow) para que quepa "+ Gasto" completo. Solo en móviles muy
-  // estrechos el botón pasa a icono.
+  // Pantallas estrechas: cabecera más compacta (rango "LUN 05 – DOM 11", sin
+  // "del/al", y separaciones más cortas) para que quepa "+ Gasto" completo.
+  // Solo en móviles muy estrechos el botón pasa a icono.
   const winWidth = useWindowDimensions().width;
   const compactHeader = winWidth < 520;
-  const tinyHeader = winWidth < 360;
+  const tinyHeader = winWidth < 370;
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
@@ -419,36 +419,36 @@ export default function MenuScreen() {
       {/* Marcador del origen de coordenadas del clon (mismo contenedor absoluto) */}
       <View ref={rootRef} style={StyleSheet.absoluteFill} pointerEvents="none" />
       {/* ─── header ─────────────────────────────────────────────────────── */}
-      <View style={s.topbar}>
-        <View style={{ flex: 1 }}>
+      <View style={[s.topbar, compactHeader && s.topbarCompact]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.eyebrow} numberOfLines={1}>{compactHeader ? `${monthLabel} · S${week}` : `${monthLabel} / Semana ${week}`}</Text>
 
           {/* Navigation row */}
-          <View style={s.navRow}>
-            <PressScale style={s.navBtn} onPress={() => setOffset(o => o - 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana anterior">
+          <View style={[s.navRow, compactHeader && s.navRowCompact]}>
+            <PressScale style={[s.navBtn, compactHeader && s.navBtnCompact]} onPress={() => setOffset(o => o - 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana anterior">
               <Text style={s.navArrow}>‹</Text>
             </PressScale>
 
-            <Text style={s.rangeText} numberOfLines={1}>
+            <Text style={[s.rangeText, compactHeader && s.rangeTextCompact]} numberOfLines={1}>
               {!compactHeader && <Text style={{ color: dim }}>del </Text>}
-              <Text style={s.rangeStrong}>{compactHeader ? '' : MN_DAYS_SHORT[0].toUpperCase() + ' '}{String(first.getDate()).padStart(2,'0')}</Text>
-              <Text style={{ color: dim }}>{compactHeader ? ' – ' : ' al '}</Text>
-              <Text style={s.rangeStrong}>{compactHeader ? '' : MN_DAYS_SHORT[6].toUpperCase() + ' '}{String(last.getDate()).padStart(2,'0')}</Text>
+              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[0].toUpperCase()} {String(first.getDate()).padStart(2,'0')}</Text>
+              <Text style={{ color: dim }}>{compactHeader ? '\u2009–\u2009' : ' al '}</Text>
+              <Text style={s.rangeStrong}>{MN_DAYS_SHORT[6].toUpperCase()} {String(last.getDate()).padStart(2,'0')}</Text>
             </Text>
 
-            <PressScale style={s.navBtn} onPress={() => setOffset(o => o + 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana siguiente">
+            <PressScale style={[s.navBtn, compactHeader && s.navBtnCompact]} onPress={() => setOffset(o => o + 1)} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Semana siguiente">
               <Text style={s.navArrow}>›</Text>
             </PressScale>
           </View>
         </View>
 
-        <View style={s.topActions}>
-          <PressScale style={[s.addSpendBtn, tinyHeader && s.addSpendBtnIcon, { borderColor: accent.hex }]} onPress={() => setShowSpend(true)} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir gasto del súper">
+        <View style={[s.topActions, compactHeader && s.topActionsCompact]}>
+          <PressScale style={[s.addSpendBtn, compactHeader && s.actionBtnCompact, tinyHeader && s.addSpendBtnIcon, { borderColor: accent.hex }]} onPress={() => setShowSpend(true)} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir gasto del súper">
             {tinyHeader
               ? <IconReceipt size={18} color={accent.hex} strokeWidth={2} />
               : <Text style={[s.addSpendBtnText, { color: accent.hex }]}>+ Gasto</Text>}
           </PressScale>
-          <PressScale style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
+          <PressScale style={[s.addRecipeBtn, compactHeader && s.actionBtnCompact, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
             <Text style={s.addRecipeBtnText}>+ Receta</Text>
           </PressScale>
         </View>
@@ -1035,14 +1035,17 @@ const s = StyleSheet.create({
 
   topbar: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12, gap: 12,
+    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12, gap: 12,
   },
+  topbarCompact: { gap: 6 },
   eyebrow: {
     fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT,
     fontWeight: '500', textTransform: 'uppercase', marginBottom: 6,
   },
 
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  navRowCompact: { gap: 3 },
+  navBtnCompact: { width: 28, height: 28, borderRadius: 14 },
   navBtn: {
     width: 30, height: 30, borderRadius: 15,
     borderWidth: 1.5, borderColor: C.line, backgroundColor: C.card,
@@ -1050,10 +1053,14 @@ const s = StyleSheet.create({
   },
   navArrow: { fontSize: 20, color: C.ink, lineHeight: 24, fontWeight: '300' },
 
-  rangeText:   { flex: 1, fontSize: 14, fontWeight: '600', letterSpacing: -0.2, color: C.ink, fontFamily: FONT },
+  // flexShrink (no flex:1): las flechas van pegadas al rango, sin hueco muerto.
+  rangeText:   { flexShrink: 1, fontSize: 14, fontWeight: '600', letterSpacing: -0.2, color: C.ink, fontFamily: FONT },
   rangeStrong: { fontWeight: '600', color: C.ink },
+  rangeTextCompact: { fontSize: 13, letterSpacing: -0.3 },
 
   topActions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  topActionsCompact: { gap: 6 },
+  actionBtnCompact: { paddingHorizontal: 11 },
   addRecipeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     height: 38, paddingHorizontal: 15, borderRadius: R.pill,
