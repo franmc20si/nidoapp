@@ -24,9 +24,11 @@ import { getServiceCat } from '@/constants/services';
 import { ServiceIcon, IconNest, IconBell } from '@/components/icons';
 import { nextPaymentDate, daysUntilNextPayment } from '@/lib/nextPayment';
 
-// Colores propios de la tarjeta "Falta por comprar".
-const COMPRA_BG     = '#F3D8A1';
-const COMPRA_ACCENT = '#FF7A00';
+// Colores propios de la tarjeta "Falta por comprar". Pareja elegida por
+// contraste: el naranja sobre este fondo da 5,2:1 (WCAG AA pide ≥ 4,5:1 para
+// texto pequeño; el #FF7A00 original sobre #F3D8A1 se quedaba en 1,9:1).
+const COMPRA_BG     = '#F8E6C0';
+const COMPRA_ACCENT = '#9A4700';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function mixHex(a: string, b: string, t: number) {
