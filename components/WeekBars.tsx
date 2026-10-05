@@ -16,12 +16,10 @@ interface Props {
   color: string;       // color pleno (barra seleccionada)
   dimColor: string;    // resto de barras
   height?: number;
-  showWeekLabels?: boolean;
-  showValue?: boolean;  // etiqueta de importe sobre la barra activa
   onSelect?: (key: string) => void;
 }
 
-export default function WeekBars({ data, selectedKey, color, dimColor, height = 120, showWeekLabels = true, showValue = true, onSelect }: Props) {
+export default function WeekBars({ data, selectedKey, color, dimColor, height = 120, onSelect }: Props) {
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const max = Math.max(...data.map((d) => d.total), 1);
   const activeKey = hoverKey ?? selectedKey;
@@ -32,11 +30,11 @@ export default function WeekBars({ data, selectedKey, color, dimColor, height = 
   const step = Math.ceil(data.length / 10);
   const n = data.length;
   const active = data.find((d) => d.key === activeKey);
-  const inlineValue = showValue && !dense;
+  const inlineValue = !dense;
 
   return (
     <View>
-      {showValue && dense && (
+      {dense && (
         <Text style={s.readout} numberOfLines={1}>
           {active ? `S${isoWeekNum(active.monday)} · ${money(active.total)} €` : ' '}
         </Text>
@@ -71,24 +69,22 @@ export default function WeekBars({ data, selectedKey, color, dimColor, height = 
         })}
       </View>
       <View style={s.baseline} />
-      {showWeekLabels && (
-        dense ? (
-          <View style={s.labelsDense}>
-            {data.map((d, i) => ((n - 1 - i) % step === 0) && (
-              <Text key={d.key} style={[s.labelAbs, { left: `${((i + 0.5) / n) * 100}%` }, d.key === selectedKey && s.labelOn]} numberOfLines={1}>
-                S{isoWeekNum(d.monday)}
-              </Text>
-            ))}
-          </View>
-        ) : (
-          <View style={s.labels}>
-            {data.map((d) => (
-              <Text key={d.key} style={[s.label, d.key === selectedKey && s.labelOn]} numberOfLines={1}>
-                S{isoWeekNum(d.monday)}
-              </Text>
-            ))}
-          </View>
-        )
+      {dense ? (
+        <View style={s.labelsDense}>
+          {data.map((d, i) => ((n - 1 - i) % step === 0) && (
+            <Text key={d.key} style={[s.labelAbs, { left: `${((i + 0.5) / n) * 100}%` }, d.key === selectedKey && s.labelOn]} numberOfLines={1}>
+              S{isoWeekNum(d.monday)}
+            </Text>
+          ))}
+        </View>
+      ) : (
+        <View style={s.labels}>
+          {data.map((d) => (
+            <Text key={d.key} style={[s.label, d.key === selectedKey && s.labelOn]} numberOfLines={1}>
+              S{isoWeekNum(d.monday)}
+            </Text>
+          ))}
+        </View>
       )}
     </View>
   );
