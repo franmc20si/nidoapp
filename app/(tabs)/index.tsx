@@ -504,17 +504,17 @@ export default function HoyScreen() {
         <View style={n.sectionGap}>
           <View style={n.compraCard}>
             <View style={n.cardHeaderRow}>
-              <Text style={[n.cardLabel, { color: COMPRA_ACCENT }]}>FALTA POR COMPRAR</Text>
+              <Text style={[n.cardLabel, { color: COMPRA_ACCENT }]}>
+                FALTA POR COMPRAR{pendingItems.length > 0 ? ` (${pendingItems.length})` : ''}
+              </Text>
               <PressScale
                 style={n.shopBtn}
                 onPress={() => setShowShop(true)}
                 scaleTo={0.95}
                 accessibilityRole="button"
-                accessibilityLabel={`${pendingItems.length} por comprar. Abrir la lista de la compra completa`}
+                accessibilityLabel="Abrir la lista de la compra completa"
               >
-                <Text style={n.shopBtnText}>
-                  {pendingItems.length > 0 ? `${pendingItems.length} / ` : ''}Lista completa
-                </Text>
+                <Text style={n.shopBtnText}>Lista completa</Text>
               </PressScale>
             </View>
             {pendingItems.length === 0 ? (
