@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Animated, Pressable, View, Modal, Easing, StyleSheet, Dimensions,
+  Animated, Pressable, View, Easing, StyleSheet, Dimensions,
   KeyboardAvoidingView, Platform, PanResponder, StyleProp, ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, R } from '@/constants/theme';
 import { useReducedMotion } from '@/lib/useReducedMotion';
+import SheetPortal from '@/components/SheetPortal';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -58,14 +59,20 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       }),
       Animated.timing(scrim, { toValue: open ? 1 : 0, duration, easing: EASE_OUT, useNativeDriver: true }),
     ]).start(({ finished }) => { if (finished && onDone) onDone(); });
-    // Red de seguridad: si la animación se interrumpe (otro render la
-    // reinicia a medias) `finished` llega `false` y `onDone` nunca se
-    // dispara — el Modal se queda montado con el scrim invisible pero
-    // `pointerEvents` activo, bloqueando toda la pantalla para siempre.
-    if (!open && onDone) setTimeout(onDone, duration + 60);
+    // Red de seguridad: si la animación se interrumpe `finished` llega
+    // `false` y `onDone` nunca se dispara. Se guarda el timer para poder
+    // cancelarlo si el sheet se reabre antes (si no, desmontaría el sheet
+    // recién abierto).
+    if (!open && onDone) closeTimer.current = setTimeout(onDone, duration + 60);
   };
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearCloseTimer = () => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  };
+  useEffect(() => clearCloseTimer, []);
 
   useEffect(() => {
+    clearCloseTimer();
     if (visible) {
       setScrimArmed(false);
       let raf2 = 0;
@@ -74,7 +81,7 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
     } else if (render) {
       setScrimArmed(false);
-      animate(false, () => setRender(false));
+      animate(false, () => { clearCloseTimer(); setRender(false); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -107,7 +114,10 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
   ).current;
 
   return (
-    <Modal visible={render} transparent animationType="none" onRequestClose={onClose}>
+    // Solo se monta mientras el sheet está abierto o animando la salida: al
+    // cerrar no queda NADA en el DOM que pueda capturar toques.
+    !render ? null :
+    <SheetPortal onRequestClose={onClose}>
       {/* pointerEvents atado a `visible && scrimArmed` (no a `render`) y
           puesto en el `style` (no como prop): como prop, Pressable no lo
           aplica de forma fiable en react-native-web — el elemento se queda
@@ -120,7 +130,7 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       />
       {/* Mismo problema que el scrim: "box-none" como prop no se aplica de
           forma fiable — este contenedor a pantalla completa se queda
-          bloqueando toda la app mientras el Modal sigue montado (durante o
+          bloqueando toda la app mientras el sheet sigue montado (durante o
           tras cerrarse), aunque su contenido ya esté fuera de pantalla. Va
           por `style` y se desactiva del todo (ni siquiera box-none) en
           cuanto deja de estar "abierto" lógicamente. */}
@@ -130,7 +140,10 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
       >
         <Animated.View
           onLayout={(e) => { heightRef.current = e.nativeEvent.layout.height; }}
-          style={[s.sheet, { paddingBottom: insets.bottom }, sheetStyle, { transform: [{ translateY }] }]}
+          // pointer-events se hereda: la capa de SheetPortal (web) y el KAV van
+          // con none, así que el sheet lo reactiva explícitamente mientras está
+          // abierto (en web, `box-none` por style no reactiva a los hijos).
+          style={[s.sheet, { paddingBottom: insets.bottom }, sheetStyle, { transform: [{ translateY }], pointerEvents: visible ? 'auto' : 'none' } as any]}
         >
           {/* Zona de arrastre: el asa + un área generosa alrededor. */}
           <View style={s.grabZone} {...pan.panHandlers}>
@@ -139,7 +152,7 @@ export default function BottomSheet({ visible, onClose, children, sheetStyle }: 
           {children}
         </Animated.View>
       </KeyboardAvoidingView>
-    </Modal>
+    </SheetPortal>
   );
 }
 

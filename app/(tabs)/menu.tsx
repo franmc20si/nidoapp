@@ -529,7 +529,7 @@ export default function MenuScreen() {
 
       {/* ─── sheets ───────────────────────────────────────────────────────── */}
       <PickSheet
-        key={pickKey}
+        key={`pick-${pickKey}`}
         visible={!!pick}
         day={pick ? MN_DAYS_LONG[pick.day] : ''}
         meal={pick?.meal ?? 'comida'}
@@ -553,7 +553,7 @@ export default function MenuScreen() {
       />
 
       <RecipeSheet
-        key={editKey}
+        key={`recipe-${editKey}`}
         visible={!!editing}
         recipe={editing === 'new' ? null : (editing as Recipe | null)}
         onClose={() => setEditing(null)}
