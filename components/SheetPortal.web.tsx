@@ -11,10 +11,12 @@ const { createPortal } = require('react-dom') as {
 // sheet dentro (opacidad 0 pero position:fixed a pantalla completa) que se
 // tragaban todos los toques → la app parecía congelada tras añadir un plato.
 //
-// Aquí el contenedor solo se engancha a <body> en un layout effect (un render
-// descartado nunca llega a tocar el DOM) y el propio contenedor no captura
-// nada (pointer-events:none): solo el scrim y el sheet lo reactivan mientras
-// están abiertos. Aunque algo se quedara montado, no puede bloquear la app.
+// Aquí el contenedor no captura nada (pointer-events:none): solo el scrim y el
+// sheet lo reactivan mientras están abiertos, así que aunque algo se quedara
+// montado no puede bloquear la app. Se engancha a <body> al crearse (no en un
+// efecto) para que los `autoFocus` de los hijos —que se ejecutan antes que los
+// efectos del padre— encuentren el input ya en la página. Si un render se
+// descartara, solo quedaría un div vacío e inerte.
 export default function SheetPortal({ onRequestClose, children }: {
   onRequestClose: () => void;
   children: React.ReactNode;
@@ -22,11 +24,12 @@ export default function SheetPortal({ onRequestClose, children }: {
   const [el] = useState(() => {
     const d = document.createElement('div');
     d.style.cssText = 'position:fixed;inset:0;z-index:9999;pointer-events:none;display:flex;flex-direction:column;';
+    document.body.appendChild(d);
     return d;
   });
 
   useLayoutEffect(() => {
-    document.body.appendChild(el);
+    if (!el.isConnected) document.body.appendChild(el); // p.ej. tras un remount de StrictMode
     return () => { el.remove(); };
   }, [el]);
 

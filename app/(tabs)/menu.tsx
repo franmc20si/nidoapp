@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Animated, PanResponder, PanResponderGestureState, Platform, Easing,
+  TextInput, Animated, PanResponder, PanResponderGestureState, Platform, Easing, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, R, FONT } from '@/constants/theme';
@@ -12,11 +12,14 @@ import { useMenuStore, Recipe, DISH_COLORS } from '@/store/menuStore';
 import { getMondayOfWeek, addDays, isoWeekNum, weekKey } from '@/lib/week';
 import ShoppingListSheet, { GROCERY_CATS, Ingredient } from '@/components/ShoppingListSheet';
 import BasicsSheet from '@/components/BasicsSheet';
-import { GroceryIcon } from '@/components/icons';
+import { GroceryIcon, IconReceipt } from '@/components/icons';
 import { showToast } from '@/store/toastStore';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BottomSheet from '@/components/BottomSheet';
 import PressScale from '@/components/PressScale';
+import GrocerySpendCard from '@/components/GrocerySpendCard';
+import GrocerySpendSheet from '@/components/GrocerySpendSheet';
+import { useGroceryStore } from '@/store/groceryStore';
 
 // ─── color helpers ─────────────────────────────────────────────────────────
 function hexToRgb(h: string): [number, number, number] {
@@ -95,6 +98,14 @@ export default function MenuScreen() {
   // ── persistence: carga compartida desde el store ─────────────────────────
   useEffect(() => { if (household?.id) loadMenu(household.id); }, [household?.id]);
   useFocusEffect(useCallback(() => { if (household?.id) loadMenu(household.id); }, [household?.id]));
+
+  // Gasto del súper (tarjeta + botón "+ Gasto")
+  const loadGrocery = useGroceryStore((st) => st.load);
+  useEffect(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]);
+  useFocusEffect(useCallback(() => { if (household?.id) loadGrocery(household.id); }, [household?.id]));
+  const [showSpend, setShowSpend] = useState(false);
+  // En pantallas estrechas "+ Gasto" pasa a icono para no comerse el rango de la semana.
+  const compactHeader = useWindowDimensions().width < 520;
 
   // ── sheet state ────────────────────────────────────────────────────────
   const [pick,       setPick]       = useState<{ day: number; meal: 'comida'|'cena' } | null>(null);
@@ -415,9 +426,9 @@ export default function MenuScreen() {
             </PressScale>
 
             <Text style={s.rangeText} numberOfLines={1}>
-              <Text style={{ color: dim }}>del </Text>
+              {!compactHeader && <Text style={{ color: dim }}>del </Text>}
               <Text style={s.rangeStrong}>{MN_DAYS_SHORT[0].toUpperCase()} {String(first.getDate()).padStart(2,'0')}</Text>
-              <Text style={{ color: dim }}> al </Text>
+              <Text style={{ color: dim }}>{compactHeader ? ' – ' : ' al '}</Text>
               <Text style={s.rangeStrong}>{MN_DAYS_SHORT[6].toUpperCase()} {String(last.getDate()).padStart(2,'0')}</Text>
             </Text>
 
@@ -427,9 +438,16 @@ export default function MenuScreen() {
           </View>
         </View>
 
-        <PressScale style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
-          <Text style={s.addRecipeBtnText}>+ Receta</Text>
-        </PressScale>
+        <View style={s.topActions}>
+          <PressScale style={[s.addSpendBtn, compactHeader && s.addSpendBtnIcon, { borderColor: accent.hex }]} onPress={() => setShowSpend(true)} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir gasto del súper">
+            {compactHeader
+              ? <IconReceipt size={18} color={accent.hex} strokeWidth={2} />
+              : <Text style={[s.addSpendBtnText, { color: accent.hex }]}>+ Gasto</Text>}
+          </PressScale>
+          <PressScale style={[s.addRecipeBtn, { backgroundColor: accent.hex }]} onPress={() => setEditing('new')} scaleTo={0.96} accessibilityRole="button" accessibilityLabel="Añadir receta">
+            <Text style={s.addRecipeBtnText}>+ Receta</Text>
+          </PressScale>
+        </View>
       </View>
 
       {/* "Esta semana" pill when navigated away */}
@@ -481,6 +499,11 @@ export default function MenuScreen() {
               </View>
             );
           })}
+        </View>
+
+        {/* gasto del súper de la semana que se está viendo */}
+        <View style={s.spendCardWrap}>
+          <GrocerySpendCard monday={monday} week={week} accent={accent} />
         </View>
 
         {/* bottom buttons */}
@@ -565,6 +588,12 @@ export default function MenuScreen() {
         visible={showBasics}
         onClose={() => setShowBasics(false)}
         accent={accent}
+      />
+
+      <GrocerySpendSheet
+        visible={showSpend}
+        spend={null}
+        onClose={() => setShowSpend(false)}
       />
 
       <ShoppingListSheet
@@ -1020,12 +1049,19 @@ const s = StyleSheet.create({
   rangeText:   { flex: 1, fontSize: 14, fontWeight: '600', letterSpacing: -0.2, color: C.ink, fontFamily: FONT },
   rangeStrong: { fontWeight: '600', color: C.ink },
 
+  topActions: { flexDirection: 'row', gap: 8, marginTop: 14 },
   addRecipeBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     height: 38, paddingHorizontal: 15, borderRadius: R.pill,
-    marginTop: 14,
   },
   addRecipeBtnText: { color: C.white, fontSize: 14, fontWeight: '600', fontFamily: FONT },
+  addSpendBtn: {
+    alignItems: 'center', justifyContent: 'center',
+    height: 38, paddingHorizontal: 15, borderRadius: R.pill, borderWidth: 1.5, backgroundColor: C.card,
+  },
+  addSpendBtnIcon: { width: 38, paddingHorizontal: 0 },
+  addSpendBtnText: { fontSize: 14, fontWeight: '600', fontFamily: FONT },
+  spendCardWrap: { marginTop: 18 },
 
   todayPill: {
     alignSelf: 'center', marginBottom: 10,

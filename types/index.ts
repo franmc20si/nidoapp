@@ -73,6 +73,26 @@ export interface Expense {
   created_at: string;
 }
 
+// Gasto del súper (grocery_spending.sql)
+export interface GroceryStore {
+  id: string;
+  household_id: string;
+  name: string;
+  color: string;            // clave de NIDO_COLORS
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface GrocerySpend {
+  id: string;
+  household_id: string;
+  store_id: string | null;  // null = sin tienda (tienda borrada)
+  amount: number;
+  spent_on: string;         // YYYY-MM-DD (fecha local)
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Bank {
   id: string;
   household_id: string;

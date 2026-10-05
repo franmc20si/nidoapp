@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { ensureProfile, resolveDestination } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
 import { C } from '@/constants/theme';
+import { ToastBar } from '@/components/ToastBar';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -88,11 +89,15 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="bancos" options={{ presentation: 'card', animation: 'slide_from_right' }} />
+        <Stack.Screen name="super" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="casas" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viajes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="recurrentes" options={{ presentation: 'card', animation: 'slide_from_right' }} />
         <Stack.Screen name="viaje/[id]" options={{ presentation: 'card', animation: 'slide_from_right' }} />
       </Stack>
+      {/* En la raíz (no en las tabs): así los toasts —y su "Deshacer"— también
+          salen en las pantallas del Stack (super, recurrentes, viajes…). */}
+      <ToastBar />
     </View>
   );
 }

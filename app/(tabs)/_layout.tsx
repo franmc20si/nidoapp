@@ -9,7 +9,6 @@ import {
   IconChart as IcoChart, IconMenu as IcoMenu,
   IconCalendar as IcoCalendar,
 } from '@/components/icons';
-import { ToastBar } from '@/components/ToastBar';
 import AddTaskSheet from '@/components/AddTaskSheet';
 
 function IconHome({ active, accent }: { active: boolean; accent: string }) {
@@ -155,7 +154,6 @@ export default function TabsLayout() {
         <Tabs.Screen name="calendario" />
         <Tabs.Screen name="household" options={{ href: null }} />
       </Tabs>
-      <ToastBar />
     </>
   );
 }

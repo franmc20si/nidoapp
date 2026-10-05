@@ -10,7 +10,7 @@ import {
   Lightbulb, Flame, Globe, Smartphone, Building, ShieldCheck,
   Clapperboard, Dumbbell, Package,
   Sun, Utensils, Coffee, Moon, BedDouble,
-  Plane, House, Landmark, Repeat, StickyNote,
+  Plane, House, Landmark, Repeat, StickyNote, ReceiptEuro,
 } from 'lucide-react-native';
 import { C } from '@/constants/theme';
 
@@ -483,3 +483,4 @@ export const IconBank    = Landmark; // 🏦 (bancos)
 export const IconRepeat  = Repeat;   // 🔁 (recurrentes)
 export const IconFlame   = Flame;    // 🔥 (racha)
 export const IconNote    = StickyNote; // 📝 (notas)
+export const IconReceipt = ReceiptEuro; // gasto del súper
