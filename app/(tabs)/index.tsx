@@ -632,7 +632,7 @@ const n = StyleSheet.create({
 
   // Falta por comprar
   compraCard: {
-    borderRadius: R.l, borderWidth: 1,
+    borderRadius: R.l, borderWidth: 2,
     // Sin fondo propio: rojo semántico sobre el papel de la página (4,7:1, AA).
     borderColor: C.dangerLine,
     backgroundColor: 'transparent',
