@@ -491,6 +491,15 @@ export default function MenuScreen() {
           })}
         </View>
 
+        {/* Lista de la compra: lo primero bajo el menú (es lo que se usa a diario) */}
+        <PressScale style={[s.shopBtn, s.shopBtnTop, { borderColor: accent.hex + '70', backgroundColor: accent.wash, flexDirection: 'row', gap: 8 }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
+          <GroceryIcon catKey="otros" size={16} color={accent.hex} />
+          <Text style={[s.shopBtnText, { color: accent.hex }]}>
+            Lista de la compra · Semana {week}
+            {weekIngredients.length > 0 ? ` (${weekIngredients.length} ingredientes)` : ''}
+          </Text>
+        </PressScale>
+
         {/* gasto del súper de la semana que se está viendo */}
         <View style={s.spendCardWrap}>
           <GrocerySpendCard monday={monday} week={week} accent={accent} />
@@ -503,13 +512,6 @@ export default function MenuScreen() {
           </PressScale>
           <PressScale style={s.seeDishesBtn} onPress={() => setShowBasics(true)} scaleTo={0.97} accessibilityRole="button" accessibilityLabel="Gestionar básicos semanales">
             <Text style={s.seeDishesText}>Básicos semanales</Text>
-          </PressScale>
-          <PressScale style={[s.shopBtn, { borderColor: accent.hex + '70', backgroundColor: accent.wash, flexDirection: 'row', gap: 8 }]} onPress={() => setShowShop(true)} scaleTo={0.98} accessibilityRole="button" accessibilityLabel="Abrir la lista de la compra">
-            <GroceryIcon catKey="otros" size={16} color={accent.hex} />
-            <Text style={[s.shopBtnText, { color: accent.hex }]}>
-              Lista de la compra · Semana {week}
-              {weekIngredients.length > 0 ? ` (${weekIngredients.length} ingredientes)` : ''}
-            </Text>
           </PressScale>
         </View>
       </ScrollView>
@@ -1058,7 +1060,8 @@ const s = StyleSheet.create({
   },
   addSpendBtnIcon: { width: 38, paddingHorizontal: 0 },
   addSpendBtnText: { fontSize: 14, fontWeight: '600', fontFamily: FONT },
-  spendCardWrap: { marginTop: 18 },
+  spendCardWrap: { marginTop: 10 },
+  shopBtnTop: { marginTop: 18 },
 
   todayPill: {
     alignSelf: 'center', marginBottom: 10,
@@ -1113,7 +1116,7 @@ const s = StyleSheet.create({
     elevation: 10, zIndex: 100,
   },
 
-  bottomBtns: { marginTop: 18, gap: 10 },
+  bottomBtns: { marginTop: 10, gap: 10 },
   seeDishesBtn: {
     height: 42, paddingHorizontal: 22,
     borderRadius: R.pill, borderWidth: 1.5, borderColor: C.line,
