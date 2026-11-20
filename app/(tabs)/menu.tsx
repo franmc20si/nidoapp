@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useFocusEffect } from 'expo-router';
+import { create } from 'zustand';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Animated, PanResponder, PanResponderGestureState, Platform, Easing, useWindowDimensions,
@@ -61,6 +62,12 @@ const LONG_PRESS_MS = 280;
 const IS_WEB = Platform.OS === 'web';
 const EASE_OUT_CSS = 'cubic-bezier(0.23, 1, 0.32, 1)';
 const LAND_MS = 240;
+
+// Hueco sobrevolado durante un arrastre. Vive fuera del estado de MenuScreen:
+// si no, cada cambio de hueco repintaba la pantalla entera (con sus 6 sheets),
+// lo que en móvil se notaba a tirones. Solo se suscriben las celdas.
+const useDragHover = create<{ slot: string | null }>(() => ({ slot: null }));
+const setHover = (slot: string | null) => useDragHover.setState({ slot });
 
 // ─── main screen ───────────────────────────────────────────────────────────
 export default function MenuScreen() {
@@ -147,7 +154,6 @@ export default function MenuScreen() {
     from !== to && canPlace(plan[from], mealOf(to)) && canPlace(plan[to], mealOf(from));
 
   const [drag,      setDrag]      = useState<{ from: string; value: string; w: number; h: number } | null>(null);
-  const [hoverSlot, setHoverSlot] = useState<string | null>(null);
   const [armedSlot, setArmedSlot] = useState<string | null>(null);
   const dragPos      = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const cloneScale   = useRef(new Animated.Value(1)).current;
@@ -204,7 +210,7 @@ export default function MenuScreen() {
     settlingRef.current = false;
     dragRef.current = null; hoverRef.current = null; armedRef.current = null;
     if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    setDrag(null); setHoverSlot(null); setArmedSlot(null);
+    setDrag(null); setHover(null); setArmedSlot(null);
     cloneScale.setValue(1); cloneOpacity.setValue(1);
     setDragActiveWeb(false);
   };
@@ -303,7 +309,7 @@ export default function MenuScreen() {
       moveClone(clonePosFor(g.moveX, g.moveY));
       const o = scrollOff();
       const k = hitTest(g.moveX - o.x, g.moveY - o.y);
-      if (k !== hoverRef.current) { hoverRef.current = k; setHoverSlot(k); }
+      if (k !== hoverRef.current) { hoverRef.current = k; setHover(k); }
     },
     onEnd: (g) => {
       const d = dragRef.current;
@@ -311,7 +317,7 @@ export default function MenuScreen() {
       if (!d) { clearDrag(); return; }
       const o = scrollOff();
       const k = hitTest(g.moveX - o.x, g.moveY - o.y);
-      hoverRef.current = null; setHoverSlot(null);
+      hoverRef.current = null; setHover(null);
       const ok = !!k && canSwap(d.from, k);
       // Destino válido: el clon aterriza en la celda nueva. Si no, vuelve a su
       // sitio (el "rebote" comunica que ahí no cabe).
@@ -357,21 +363,31 @@ export default function MenuScreen() {
     return cb;
   };
 
-  // Vista previa del intercambio mientras se sobrevuela un destino válido.
-  const previewSwap = drag && hoverSlot && canSwap(drag.from, hoverSlot) ? hoverSlot : null;
-  const shownValue = (slot: string) => {
-    if (drag && previewSwap) {
-      if (slot === drag.from)   return plan[previewSwap];
-      if (slot === previewSwap) return plan[drag.from];
-    }
-    return plan[slot];
-  };
-  const cellState = (slot: string): CellState => {
-    if (!drag) return armedSlot === slot ? 'armed' : 'idle';
-    if (slot === previewSwap) return 'target';
-    if (slot === drag.from) return previewSwap ? 'swapped' : 'source';
-    return canSwap(drag.from, slot) ? 'idle' : 'blocked';
-  };
+  // ── gestos táctiles en web ──────────────────────────────────────────────────
+  // react-native-web escucha los toques en `document`, y los navegadores tratan
+  // esos listeners como pasivos: el móvil decide al tocar que el gesto puede
+  // ser un scroll y ya no deja frenarlo. Al levantar un plato y moverlo, la
+  // página intentaba desplazarse (o "tirar para recargar") y el navegador
+  // cancelaba el arrastre a medias. Un listener NO pasivo fijo en la rejilla
+  // —presente antes de que empiece el toque— sí puede cancelar el scroll, y
+  // solo lo hace mientras hay un plato levantado. Además, en Android mantener
+  // pulsado abre el menú contextual del navegador: se anula en la rejilla.
+  const gridRef = useRef<View>(null);
+  useEffect(() => {
+    if (!IS_WEB) return;
+    const el = gridRef.current as unknown as HTMLElement | null;
+    if (!el?.addEventListener) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if ((armedRef.current || dragRef.current) && e.cancelable) e.preventDefault();
+    };
+    const onContextMenu = (e: Event) => e.preventDefault();
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('contextmenu', onContextMenu);
+    return () => {
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, [loaded]);
 
   const saveRecipe = async (data: Recipe) => {
     setEditing(null);
@@ -453,7 +469,7 @@ export default function MenuScreen() {
         contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 32 }}
       >
         {/* ─── grid ─────────────────────────────────────────────────────── */}
-        <View>
+        <View ref={gridRef}>
           <View style={s.headerRow}>
             <View style={s.corner} />
             <Text style={s.colHeader}>Comida</Text>
@@ -473,12 +489,14 @@ export default function MenuScreen() {
                 {(['comida', 'cena'] as const).map(meal => {
                   const slot = `${i}-${meal}`;
                   return (
-                    <MealCell
+                    <GridCell
                       key={meal}
                       slot={slot}
-                      value={shownValue(slot)}
-                      recipe={recipeById(shownValue(slot))}
-                      state={cellState(slot)}
+                      plan={plan}
+                      recipeById={recipeById}
+                      canSwap={canSwap}
+                      dragFrom={drag?.from ?? null}
+                      armed={armedSlot === slot}
                       label={`${MN_DAYS_LONG[i]}, ${meal}`}
                       cellRef={cellRefFor(slot)}
                       drag={stableDrag}
@@ -622,6 +640,42 @@ function CellContent({ recipe, event }: { recipe?: Recipe; event?: string | null
   if (recipe) return <Text style={[s.dishName, { color: mixHex(recipe.color, C.ink, 0.55) }]}>{recipe.name}</Text>;
   if (event)  return <Text style={s.eventCellName}>{event}</Text>;
   return <Text style={s.cellPlus}>+</Text>;
+}
+
+// Calcula qué muestra cada celda durante un arrastre. Se suscribe al hueco
+// sobrevolado con un selector que solo cambia para las celdas implicadas (el
+// origen y la que entra/sale), así que mover el dedo repinta 2–3 celdas, no
+// la pantalla.
+function GridCell({ slot, plan, recipeById, canSwap, dragFrom, armed, label, cellRef, drag, onPress }: {
+  slot: string; plan: Record<string, string>; recipeById: (id?: string) => Recipe | undefined;
+  canSwap: (from: string, to: string) => boolean; dragFrom: string | null; armed: boolean; label: string;
+  cellRef: (ref: View | null) => void; drag: CellDragApi; onPress: (slot: string) => void;
+}) {
+  // Origen: necesita saber QUÉ hueco se sobrevuela. Resto: solo si es este.
+  const hover = useDragHover((st) =>
+    !dragFrom ? null : slot === dragFrom ? st.slot : (st.slot === slot ? slot : null));
+
+  let value = plan[slot];
+  let state: CellState = 'idle';
+  if (!dragFrom) {
+    state = armed ? 'armed' : 'idle';
+  } else if (slot === dragFrom) {
+    const valid = !!hover && canSwap(dragFrom, hover);
+    state = valid ? 'swapped' : 'source';
+    if (valid) value = plan[hover!];
+  } else if (hover === slot && canSwap(dragFrom, slot)) {
+    state = 'target';
+    value = plan[dragFrom];
+  } else {
+    state = canSwap(dragFrom, slot) ? 'idle' : 'blocked';
+  }
+
+  return (
+    <MealCell
+      slot={slot} value={value} recipe={recipeById(value)} state={state} label={label}
+      cellRef={cellRef} drag={drag} onPress={onPress}
+    />
+  );
 }
 
 // memo: drag/onPress/cellRef son estables, así que solo re-renderiza la celda
