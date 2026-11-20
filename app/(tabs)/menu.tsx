@@ -59,10 +59,10 @@ const cloneHint = Platform.select({ web: { willChange: 'transform' }, default: {
 const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined'
   && !!window.matchMedia?.('(pointer: fine)').matches;
 const LONG_PRESS_MS = 280;
-// Táctil en web: tiempo quieto para levantar el plato y tolerancia de
-// movimiento antes de considerarlo un scroll.
+// Táctil en web: mover el dedo más de TOUCH_SLOP sobre un plato lo arrastra
+// al instante; quedarse quieto TOUCH_LIFT_MS también lo levanta.
 const TOUCH_LIFT_MS = 220;
-const TOUCH_SLOP = 10;
+const TOUCH_SLOP = 6;
 // Web en pantalla táctil (sin ratón): arrastre con el gestor directo de la rejilla.
 const TOUCH_WEB = Platform.OS === 'web' && !FINE_POINTER;
 const IS_WEB = Platform.OS === 'web';
@@ -382,10 +382,11 @@ export default function MenuScreen() {
   // Arrastre táctil en web: gestor directo sobre los eventos táctiles del
   // navegador, sin pasar por Pressable (pulsación larga) + PanResponder. Ese
   // relevo exigía mover el dedo para que el plato "se cogiera" y añadía cortes.
-  // Aquí: mantener pulsado TOUCH_LIFT_MS levanta el plato al momento bajo el
-  // dedo; desde ahí sigue al dedo fotograma a fotograma. Si el dedo se mueve
-  // antes, es un scroll y no se toca nada. Ratón y nativo siguen con el
-  // PanResponder de MealCell.
+  // Aquí, un solo gesto: tocar un plato y mover el dedo lo levanta y arrastra
+  // al instante (los platos llevan touch-action:none, así que el navegador no
+  // intenta hacer scroll desde ellos; la página se desplaza tocando fuera de
+  // los platos). Quedarse quieto TOUCH_LIFT_MS también lo levanta, como aviso.
+  // Ratón y nativo siguen con el PanResponder de MealCell.
   const gridRef = useRef<View>(null);
   const planRef = useRef(plan);
   planRef.current = plan;
@@ -428,9 +429,13 @@ export default function MenuScreen() {
       if (!t || !pending) return;
       pending.x = t.pageX; pending.y = t.pageY;
       if (!lifted) {
-        // Se mueve antes de levantar → es un scroll: soltamos el gesto.
-        if (Math.hypot(pending.x - pending.x0, pending.y - pending.y0) > TOUCH_SLOP) reset();
-        return;
+        // Un solo gesto: en cuanto el dedo se mueve sobre un plato, se levanta
+        // y se arrastra (los platos no hacen scroll: touch-action none).
+        if (e.cancelable) e.preventDefault();     // refuerzo de touch-action:none
+        if (Math.hypot(pending.x - pending.x0, pending.y - pending.y0) <= TOUCH_SLOP) return;
+        if (timer) { clearTimeout(timer); timer = null; }
+        lifted = true;
+        dragApiRef.current.onStart(pending.slot, gest(pending));
       }
       if (e.cancelable) e.preventDefault();       // el plato manda, la página no se mueve
       dragApiRef.current.onMove(gest(pending));
@@ -1238,7 +1243,8 @@ const s = StyleSheet.create({
   // arrastrar y soltar
   cellWrap: { flex: 1 },
   cellDraggable: Platform.select({
-    web: { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', cursor: FINE_POINTER ? 'grab' : 'pointer' },
+    // touchAction none: el dedo sobre un plato es para arrastrarlo, no scroll.
+    web: { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'none', cursor: FINE_POINTER ? 'grab' : 'pointer' },
     default: {},
   }) as any,
   cellArmed:   { borderColor: C.ink2, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
