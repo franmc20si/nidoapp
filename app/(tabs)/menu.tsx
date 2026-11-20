@@ -182,6 +182,19 @@ export default function MenuScreen() {
   // Con el scroll bloqueado durante el arrastre, una medición al empezar vale.
   const measureAll = () => {
     const zones: typeof zonesRef.current = [];
+    // Web: medida síncrona del DOM. measureInWindow de react-native-web llega
+    // un instante después; al levantar el plato aún no había medidas y el clon
+    // salía con tamaño y punto de agarre por defecto → "saltaba" bajo el dedo.
+    if (IS_WEB) {
+      cellRefs.current.forEach((ref, key) => {
+        const r = (ref as unknown as HTMLElement).getBoundingClientRect?.();
+        if (r) zones.push({ key, x: r.left, y: r.top, w: r.width, h: r.height });
+      });
+      zonesRef.current = zones;
+      const o = (rootRef.current as unknown as HTMLElement | null)?.getBoundingClientRect?.();
+      if (o) originRef.current = { x: o.left, y: o.top };
+      return;
+    }
     cellRefs.current.forEach((ref, key) => {
       ref.measureInWindow((x, y, w, h) => { zones.push({ key, x, y, w, h }); });
     });
@@ -252,7 +265,7 @@ export default function MenuScreen() {
   const setCloneOuter = useCallback((el: any) => { cloneOuterEl.current = el; if (el) writeClonePos(); }, []);
   const setCloneInner = useCallback((el: any) => {
     cloneInnerEl.current = el;
-    if (el) { el.style.transform = 'scale(1)'; requestAnimationFrame(() => writeCloneScale(1.05, 160)); }
+    if (el) { el.style.transform = 'scale(1)'; requestAnimationFrame(() => writeCloneScale(1.03, 140)); }
   }, []);
   const moveClone = (p: { x: number; y: number }) => {
     posRef.current = p;
@@ -308,7 +321,7 @@ export default function MenuScreen() {
       if (!IS_WEB) {
         cloneOpacity.setValue(1);
         cloneScale.setValue(1);
-        Animated.spring(cloneScale, { toValue: 1.05, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
+        Animated.spring(cloneScale, { toValue: 1.03, useNativeDriver: false, speed: 20, bounciness: 6 }).start();
       }
     },
     onMove: (g) => {
@@ -398,23 +411,44 @@ export default function MenuScreen() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pending: { slot: string; id: number; x0: number; y0: number; x: number; y: number } | null = null;
     let lifted = false;
+    // Elemento que tocó el dedo. El navegador le manda TODOS los eventos de ese
+    // toque, aunque React lo saque del DOM (p.ej. el nombre del plato al
+    // levantarlo): ya desconectado, sus eventos no suben a la rejilla. Por eso
+    // move/end se escuchan en el propio elemento, no en la rejilla.
+    let touchTarget: EventTarget | null = null;
 
     const gest = (p: NonNullable<typeof pending>) =>
       ({ x0: p.x0, y0: p.y0, moveX: p.x, moveY: p.y, dx: p.x - p.x0, dy: p.y - p.y0 } as any);
     const touchOf = (e: TouchEvent) =>
       pending ? Array.from(e.changedTouches).find(t => t.identifier === pending!.id) : undefined;
+    const detach = () => {
+      if (!touchTarget) return;
+      touchTarget.removeEventListener('touchmove', onTouchMove as EventListener);
+      touchTarget.removeEventListener('touchend', onTouchEnd as EventListener);
+      touchTarget.removeEventListener('touchcancel', onTouchEnd as EventListener);
+      touchTarget = null;
+    };
     const reset = () => {
       if (timer) { clearTimeout(timer); timer = null; }
+      detach();
       pending = null; lifted = false;
     };
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 1) { if (!lifted) reset(); return; }  // pinza/zoom
+      // Red de seguridad: si un plato se quedó levantado (se perdió el "soltar"),
+      // se suelta ahí antes de empezar otro gesto, en vez de que el dedo nuevo
+      // lo "recoja" a medio camino.
+      if (pending && lifted) { dragApiRef.current.onEnd(gest(pending)); reset(); return; }
       const cellEl = (e.target as HTMLElement).closest?.('[data-slot]') as HTMLElement | null;
       const slot = cellEl?.dataset.slot;
       if (!slot || !planRef.current[slot] || settlingRef.current || dragRef.current) return;
       const t = e.changedTouches[0];
       pending = { slot, id: t.identifier, x0: t.pageX, y0: t.pageY, x: t.pageX, y: t.pageY };
+      touchTarget = e.target;
+      touchTarget!.addEventListener('touchmove', onTouchMove as EventListener, { passive: false });
+      touchTarget!.addEventListener('touchend', onTouchEnd as EventListener, { passive: false });
+      touchTarget!.addEventListener('touchcancel', onTouchEnd as EventListener, { passive: false });
       timer = setTimeout(() => {
         timer = null;
         if (!pending) return;
@@ -453,18 +487,18 @@ export default function MenuScreen() {
     };
 
     const onContextMenu = (e: Event) => e.preventDefault();
+    // Listener no pasivo fijo en la rejilla, presente ANTES del toque: hace que
+    // el navegador entregue los touchmove como cancelables. Solo frena el
+    // scroll; la lógica va en los listeners del elemento tocado.
+    const blockScroll = (e: TouchEvent) => { if (pending && e.cancelable) e.preventDefault(); };
 
     el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: false });
-    el.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    el.addEventListener('touchmove', blockScroll, { passive: false });
     el.addEventListener('contextmenu', onContextMenu);
     return () => {
       reset();
       el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchEnd);
+      el.removeEventListener('touchmove', blockScroll);
       el.removeEventListener('contextmenu', onContextMenu);
     };
     // Solo depende de `loaded`: re-engancharse en mitad de un gesto lo cortaría.
@@ -803,12 +837,18 @@ const MealCell = memo(function MealCell({ slot, value, recipe, state, label, cel
         onLongPress={TOUCH_WEB ? undefined : () => drag.arm(slot)}
         onPressOut={TOUCH_WEB ? undefined : () => drag.disarm(slot)}
         delayLongPress={LONG_PRESS_MS}
-        scaleTo={0.96}
+        // Un plato encoge poco al pulsarlo: enseguida se levanta (crece) y un
+        // encogido fuerte antes hacía que "rebotara" bajo el dedo.
+        scaleTo={filled ? 0.985 : 0.96}
         accessibilityRole="button"
         accessibilityLabel={`${label}${recipe ? ': ' + recipe.name : event ? ': ' + event : ', añadir'}`}
         accessibilityHint={filled ? 'Mantén pulsado y arrastra para cambiarlo de día' : undefined}
       >
-        {state === 'source' ? null : <CellContent recipe={recipe} event={event} />}
+        {/* En el origen se oculta, no se quita: si el dedo empezó sobre el
+            texto, quitarlo dejaría sus eventos táctiles sin destino. */}
+        <View style={state === 'source' ? s.cellContentHidden : s.cellContentWrap}>
+          <CellContent recipe={recipe} event={event} />
+        </View>
       </PressScale>
     </View>
   );
@@ -1242,6 +1282,8 @@ const s = StyleSheet.create({
 
   // arrastrar y soltar
   cellWrap: { flex: 1 },
+  cellContentWrap:   { alignItems: 'center', justifyContent: 'center' },
+  cellContentHidden: { alignItems: 'center', justifyContent: 'center', opacity: 0 },
   cellDraggable: Platform.select({
     // touchAction none: el dedo sobre un plato es para arrastrarlo, no scroll.
     web: { userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'none', cursor: FINE_POINTER ? 'grab' : 'pointer' },
