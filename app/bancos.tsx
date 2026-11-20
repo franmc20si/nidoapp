@@ -13,6 +13,8 @@ import { monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import BankSheet from '@/components/BankSheet';
+import ServiceSheet from '@/components/ServiceSheet';
+import ServiceGroupList, { ServiceGroup } from '@/components/ServiceGroupList';
 import { IconBank } from '@/components/icons';
 
 const money = (n: number) => n.toFixed(2).replace('.', ',');
@@ -22,10 +24,12 @@ export default function BancosScreen() {
   const { household } = useAuthStore();
   const { banks, loadBanks } = useBanksStore();
 
-  // Servicios: solo lo necesario para sumar el gasto mensual por banco.
-  const [subs, setSubs] = useState<Pick<Subscription, 'amount' | 'cycle' | 'bank_id'>[]>([]);
+  // Servicios completos: se listan al desplegar cada banco.
+  const [subs, setSubs] = useState<Subscription[]>([]);
   const [editingBank, setEditingBank] = useState<Bank | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+  const [subSheetOpen, setSubSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [loaded, setLoaded]     = useState(false);
@@ -39,12 +43,12 @@ export default function BancosScreen() {
       const [, subRes] = await Promise.all([
         loadBanks(household.id),
         readWithRetry(() =>
-          supabase.from('subscriptions').select('amount, cycle, bank_id').eq('household_id', household.id)
+          supabase.from('subscriptions').select('*').eq('household_id', household.id)
         ),
       ]);
       if ((subRes as any).error) throw (subRes as any).error;
       if (useBanksStore.getState().loadError) throw new Error('banks load failed');
-      setSubs(((subRes as any).data ?? []) as Pick<Subscription, 'amount' | 'cycle' | 'bank_id'>[]);
+      setSubs(((subRes as any).data ?? []) as Subscription[]);
       setLoaded(true);
     } catch (e) {
       console.error('[bancos] fetchAll error', e);
@@ -59,13 +63,15 @@ export default function BancosScreen() {
   const openNew  = () => { setEditingBank(null); setSheetOpen(true); };
   const openEdit = (b: Bank) => { setEditingBank(b); setSheetOpen(true); };
 
-  const monthlyFor = (bankId: string | null) =>
-    subs.filter(s => s.bank_id === bankId).reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
-  const countFor = (bankId: string | null) => subs.filter(s => s.bank_id === bankId).length;
+  const openSub  = (sub: Subscription) => { setEditingSub(sub); setSubSheetOpen(true); };
 
-  const unassignedCount = countFor(null);
-  const unassignedTotal = monthlyFor(null);
   const grandTotal = subs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
+  const groups: ServiceGroup[] = [
+    ...banks.map((b) => ({
+      id: b.id, name: b.name, color: nidoColorByKey(b.color).hex, onEdit: () => openEdit(b),
+    })),
+    ...(subs.some(s => !s.bank_id) ? [{ id: null, name: 'Sin banco', color: C.ink3 }] : []),
+  ];
 
   if (!loaded && loading) {
     return <SafeAreaView style={s.root}><ScreenLoader color={accent.hex} /></SafeAreaView>;
@@ -119,39 +125,7 @@ export default function BancosScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={s.list}>
-            {banks.map((b) => {
-              const col = nidoColorByKey(b.color);
-              const n = countFor(b.id);
-              return (
-                <TouchableOpacity key={b.id} style={s.bankCard} onPress={() => openEdit(b)} activeOpacity={0.75}>
-                  <View style={[s.bankDot, { backgroundColor: col.hex }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.bankName}>{b.name}</Text>
-                    <Text style={s.bankCount}>{n} {n === 1 ? 'servicio' : 'servicios'}</Text>
-                  </View>
-                  <View style={s.bankRight}>
-                    <Text style={[s.bankAmount, { color: col.hex }]}>{money(monthlyFor(b.id))} €</Text>
-                    <Text style={s.bankCycle}>/mes</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-
-            {unassignedCount > 0 && (
-              <View style={[s.bankCard, s.unassignedCard]}>
-                <View style={[s.bankDot, { backgroundColor: C.ink3 }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.bankName}>Sin banco</Text>
-                  <Text style={s.bankCount}>{unassignedCount} {unassignedCount === 1 ? 'servicio' : 'servicios'}</Text>
-                </View>
-                <View style={s.bankRight}>
-                  <Text style={[s.bankAmount, { color: C.ink2 }]}>{money(unassignedTotal)} €</Text>
-                  <Text style={s.bankCycle}>/mes</Text>
-                </View>
-              </View>
-            )}
-          </View>
+          <ServiceGroupList groups={groups} subs={subs} groupKey="bank_id" onEditService={openSub} />
         )}
       </ScrollView>
 
@@ -159,6 +133,13 @@ export default function BancosScreen() {
         bank={editingBank}
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
+        onSaved={() => fetchAll()}
+        onDeleted={() => fetchAll()}
+      />
+      <ServiceSheet
+        service={editingSub}
+        visible={subSheetOpen}
+        onClose={() => setSubSheetOpen(false)}
         onSaved={() => fetchAll()}
         onDeleted={() => fetchAll()}
       />
@@ -188,13 +169,4 @@ const s = StyleSheet.create({
   emptyBtn:    { borderRadius: R.pill, paddingHorizontal: 24, paddingVertical: 14 },
   emptyBtnText:{ color: C.white, fontWeight: '600', fontSize: 15, fontFamily: FONT },
 
-  list: { marginHorizontal: 20, gap: 10 },
-  bankCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 16, paddingVertical: 16 },
-  unassignedCard: { backgroundColor: C.paperSoft, borderStyle: 'dashed' },
-  bankDot:   { width: 14, height: 14, borderRadius: 7 },
-  bankName:  { fontSize: 16, fontWeight: '600', color: C.ink, fontFamily: FONT },
-  bankCount: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, marginTop: 2 },
-  bankRight: { alignItems: 'flex-end' },
-  bankAmount:{ fontSize: 18, fontWeight: '700', fontFamily: FONT, letterSpacing: -0.4 },
-  bankCycle: { fontSize: 11, color: C.ink3, fontFamily: FONT, marginTop: 1 },
 });

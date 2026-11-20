@@ -13,6 +13,8 @@ import { monthlyEquivalent } from '@/constants/services';
 import { nidoColorByKey } from '@/constants/nidoColors';
 import { ScreenLoader, ScreenError } from '@/components/ScreenLoader';
 import HouseSheet from '@/components/HouseSheet';
+import ServiceSheet from '@/components/ServiceSheet';
+import ServiceGroupList, { ServiceGroup } from '@/components/ServiceGroupList';
 import { IconHouse } from '@/components/icons';
 
 const money = (n: number) => n.toFixed(2).replace('.', ',');
@@ -22,10 +24,12 @@ export default function CasasScreen() {
   const { household } = useAuthStore();
   const { houses, loadHouses } = useHousesStore();
 
-  // Servicios: solo lo necesario para sumar el gasto mensual por casa.
-  const [subs, setSubs] = useState<Pick<Subscription, 'amount' | 'cycle' | 'house_id'>[]>([]);
+  // Servicios completos: se listan al desplegar cada casa.
+  const [subs, setSubs] = useState<Subscription[]>([]);
   const [editingHouse, setEditingHouse] = useState<House | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+  const [subSheetOpen, setSubSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [loaded, setLoaded]     = useState(false);
@@ -39,12 +43,12 @@ export default function CasasScreen() {
       const [, subRes] = await Promise.all([
         loadHouses(household.id),
         readWithRetry(() =>
-          supabase.from('subscriptions').select('amount, cycle, house_id').eq('household_id', household.id)
+          supabase.from('subscriptions').select('*').eq('household_id', household.id)
         ),
       ]);
       if ((subRes as any).error) throw (subRes as any).error;
       if (useHousesStore.getState().loadError) throw new Error('houses load failed');
-      setSubs(((subRes as any).data ?? []) as Pick<Subscription, 'amount' | 'cycle' | 'house_id'>[]);
+      setSubs(((subRes as any).data ?? []) as Subscription[]);
       setLoaded(true);
     } catch (e) {
       console.error('[casas] fetchAll error', e);
@@ -59,13 +63,15 @@ export default function CasasScreen() {
   const openNew  = () => { setEditingHouse(null); setSheetOpen(true); };
   const openEdit = (h: House) => { setEditingHouse(h); setSheetOpen(true); };
 
-  const monthlyFor = (houseId: string | null) =>
-    subs.filter(s => s.house_id === houseId).reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
-  const countFor = (houseId: string | null) => subs.filter(s => s.house_id === houseId).length;
+  const openSub  = (sub: Subscription) => { setEditingSub(sub); setSubSheetOpen(true); };
 
-  const unassignedCount = countFor(null);
-  const unassignedTotal = monthlyFor(null);
   const grandTotal = subs.reduce((acc, s) => acc + monthlyEquivalent(s.amount, s.cycle), 0);
+  const groups: ServiceGroup[] = [
+    ...houses.map((h) => ({
+      id: h.id, name: h.name, color: nidoColorByKey(h.color).hex, onEdit: () => openEdit(h),
+    })),
+    ...(subs.some(s => !s.house_id) ? [{ id: null, name: 'Sin casa', color: C.ink3 }] : []),
+  ];
 
   if (!loaded && loading) {
     return <SafeAreaView style={s.root}><ScreenLoader color={accent.hex} /></SafeAreaView>;
@@ -119,39 +125,7 @@ export default function CasasScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={s.list}>
-            {houses.map((h) => {
-              const col = nidoColorByKey(h.color);
-              const n = countFor(h.id);
-              return (
-                <TouchableOpacity key={h.id} style={s.houseCard} onPress={() => openEdit(h)} activeOpacity={0.75}>
-                  <View style={[s.houseDot, { backgroundColor: col.hex }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.houseName}>{h.name}</Text>
-                    <Text style={s.houseCount}>{n} {n === 1 ? 'servicio' : 'servicios'}</Text>
-                  </View>
-                  <View style={s.houseRight}>
-                    <Text style={[s.houseAmount, { color: col.hex }]}>{money(monthlyFor(h.id))} €</Text>
-                    <Text style={s.houseCycle}>/mes</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-
-            {unassignedCount > 0 && (
-              <View style={[s.houseCard, s.unassignedCard]}>
-                <View style={[s.houseDot, { backgroundColor: C.ink3 }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.houseName}>Sin casa</Text>
-                  <Text style={s.houseCount}>{unassignedCount} {unassignedCount === 1 ? 'servicio' : 'servicios'}</Text>
-                </View>
-                <View style={s.houseRight}>
-                  <Text style={[s.houseAmount, { color: C.ink2 }]}>{money(unassignedTotal)} €</Text>
-                  <Text style={s.houseCycle}>/mes</Text>
-                </View>
-              </View>
-            )}
-          </View>
+          <ServiceGroupList groups={groups} subs={subs} groupKey="house_id" onEditService={openSub} />
         )}
       </ScrollView>
 
@@ -159,6 +133,13 @@ export default function CasasScreen() {
         house={editingHouse}
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
+        onSaved={() => fetchAll()}
+        onDeleted={() => fetchAll()}
+      />
+      <ServiceSheet
+        service={editingSub}
+        visible={subSheetOpen}
+        onClose={() => setSubSheetOpen(false)}
         onSaved={() => fetchAll()}
         onDeleted={() => fetchAll()}
       />
@@ -188,13 +169,4 @@ const s = StyleSheet.create({
   emptyBtn:    { borderRadius: R.pill, paddingHorizontal: 24, paddingVertical: 14 },
   emptyBtnText:{ color: C.white, fontWeight: '600', fontSize: 15, fontFamily: FONT },
 
-  list: { marginHorizontal: 20, gap: 10 },
-  houseCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: R.l, borderWidth: 1, borderColor: C.line, paddingHorizontal: 16, paddingVertical: 16 },
-  unassignedCard: { backgroundColor: C.paperSoft, borderStyle: 'dashed' },
-  houseDot:   { width: 14, height: 14, borderRadius: 7 },
-  houseName:  { fontSize: 16, fontWeight: '600', color: C.ink, fontFamily: FONT },
-  houseCount: { fontSize: 12.5, color: C.ink3, fontFamily: FONT, marginTop: 2 },
-  houseRight: { alignItems: 'flex-end' },
-  houseAmount:{ fontSize: 18, fontWeight: '700', fontFamily: FONT, letterSpacing: -0.4 },
-  houseCycle: { fontSize: 11, color: C.ink3, fontFamily: FONT, marginTop: 1 },
 });

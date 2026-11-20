@@ -350,7 +350,8 @@ const s = StyleSheet.create({
   eyebrow: { fontSize: 11, letterSpacing: 1.8, color: C.ink3, fontFamily: FONT, fontWeight: '600' },
   title:   { fontSize: 30, fontWeight: '500', color: C.ink, fontFamily: FONT, letterSpacing: -0.6, marginTop: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'flex-end' },
-  iconBtn: { width: 40, height: 40, borderRadius: R.pill, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  // Mismo estilo que el resto de botones de icono (campana de Inicio, Reparto…).
+  iconBtn: { width: 40, height: 40, borderRadius: R.pill, borderWidth: 1, borderColor: C.line, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' },
   iconBtnGlyph: { fontSize: 17 },
   addBtn:  { borderRadius: R.pill, paddingHorizontal: 16, paddingVertical: 10 },
   addBtnText: { color: C.white, fontWeight: '600', fontSize: 14, fontFamily: FONT },
