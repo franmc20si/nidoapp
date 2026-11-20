@@ -13,6 +13,19 @@ import { useAutoUpdate } from '@/lib/useAutoUpdate';
 
 SplashScreen.preventAutoHideAsync();
 
+// iOS hace zoom automático al enfocar cualquier campo con letra < 16px, y no
+// deshace el zoom al salir: la pantalla se queda descuadrada con el teclado.
+// En pantallas táctiles forzamos 16px en los campos de texto. Y min-width:0:
+// un <input> trae un ancho mínimo propio (crece con la letra) que impide que
+// un campo con flex:1 encoja, y empuja fuera los botones de su fila.
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent =
+    'input, textarea { min-width: 0; }\n' +
+    '@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }';
+  document.head.appendChild(style);
+}
+
 
 export default function RootLayout() {
   const { setSession, setProfile, setHousehold, session, isLoading } = useAuthStore();

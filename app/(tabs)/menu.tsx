@@ -823,6 +823,18 @@ function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
   const [ingAmount,     setIngAmount]     = useState('');
   const [ingCat,        setIngCat]        = useState('otros');
   const [showCatPicker, setShowCatPicker] = useState(false);
+  // La rejilla de categorías se abre debajo de la fila de ingrediente: en móvil
+  // (y más con el teclado abierto) quedaba cortada por abajo. Al abrirla, que se
+  // vea entera.
+  const catGridRef = useRef<View>(null);
+  useEffect(() => {
+    if (!showCatPicker || Platform.OS !== 'web') return;
+    const t = setTimeout(() => {
+      (catGridRef.current as unknown as HTMLElement | null)
+        ?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [showCatPicker]);
   const isEdit = !!(r?.id);
 
   const addIngredient = () => {
@@ -962,7 +974,7 @@ function RecipeSheet({ visible, recipe, onClose, onSave, onDelete }: {
 
             {/* compact category grid — shown on demand */}
             {showCatPicker && (
-              <View style={sh.ingCatGrid}>
+              <View ref={catGridRef} style={sh.ingCatGrid}>
                 {GROCERY_CATS.map(c => (
                   <TouchableOpacity
                     key={c.key}
