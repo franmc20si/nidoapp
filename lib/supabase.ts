@@ -54,13 +54,49 @@ async function webLockWithTimeout<R>(
   }
 }
 
+// ── Tokens de OAuth en la URL (web) ──────────────────────────────────────────
+// Leemos nosotros el #access_token de la vuelta de Google en vez de dejar que lo
+// haga supabase-js (detectSessionInUrl). supabase-js limpia la URL con
+// `location.hash = ''`, eso dispara un `popstate` y expo-router lo procesa antes
+// de tener montado el navegador → "Cannot read properties of undefined (reading
+// 'includes')". Aquí limpiamos con history.replaceState, que no dispara popstate.
+const isWeb = Platform.OS === 'web' && typeof window !== 'undefined';
+
+function takeOAuthParamsFromUrl(): URLSearchParams | null {
+  if (!isWeb) return null;
+  const hash = window.location.hash;
+  if (!hash.includes('access_token') && !hash.includes('error_description')) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  window.history.replaceState(
+    window.history.state,
+    '',
+    window.location.pathname + window.location.search,
+  );
+  return params;
+}
+
+const oauthParams = takeOAuthParamsFromUrl();
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: !isWeb,
     flowType: 'implicit',
     lock: webLockWithTimeout,
   },
 });
+
+if (oauthParams) {
+  const access_token = oauthParams.get('access_token');
+  const refresh_token = oauthParams.get('refresh_token');
+  if (access_token && refresh_token) {
+    // Dispara SIGNED_IN, que recogen _layout y auth-callback.
+    supabase.auth.setSession({ access_token, refresh_token }).catch((e) => {
+      console.warn('[auth] No se pudo guardar la sesión de OAuth', e);
+    });
+  } else {
+    console.warn('[auth] Error de OAuth', oauthParams.get('error_description'));
+  }
+}

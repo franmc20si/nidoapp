@@ -1,6 +1,12 @@
 {
-  "buildCommand": "npx expo export --platform web && cp -r public/* dist/ && node scripts/inject-head.js",
+  "buildCommand": "export EXPO_PUBLIC_BUILD_ID=${VERCEL_GIT_COMMIT_SHA:-$(date +%s)} && npx expo export --platform web && cp -r public/* dist/ && node scripts/inject-head.js && node scripts/write-version.js",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/version.json",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
+  ],
   "rewrites": [
     { "source": "/manifest.json",       "destination": "/manifest.json" },
     { "source": "/favicon.svg",         "destination": "/favicon.svg" },

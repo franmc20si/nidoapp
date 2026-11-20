@@ -9,6 +9,7 @@ import { ensureProfile, resolveDestination } from '@/lib/auth';
 import { useAuthStore } from '@/store/authStore';
 import { C } from '@/constants/theme';
 import { ToastBar } from '@/components/ToastBar';
+import { useAutoUpdate } from '@/lib/useAutoUpdate';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,8 @@ export default function RootLayout() {
   // (y resetear a la tab inicial) cuando supabase re-emite SIGNED_IN al volver el
   // foco a la pestaña del navegador.
   const authHandledForUser = useRef<string | null>(null);
+
+  useAutoUpdate();
 
   useEffect(() => {
     // Start font loading in background — don't block auth listener
