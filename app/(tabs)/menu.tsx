@@ -59,6 +59,12 @@ const cloneHint = Platform.select({ web: { willChange: 'transform' }, default: {
 const FINE_POINTER = Platform.OS === 'web' && typeof window !== 'undefined'
   && !!window.matchMedia?.('(pointer: fine)').matches;
 const LONG_PRESS_MS = 280;
+// Táctil en web: tiempo quieto para levantar el plato y tolerancia de
+// movimiento antes de considerarlo un scroll.
+const TOUCH_LIFT_MS = 220;
+const TOUCH_SLOP = 10;
+// Web en pantalla táctil (sin ratón): arrastre con el gestor directo de la rejilla.
+const TOUCH_WEB = Platform.OS === 'web' && !FINE_POINTER;
 const IS_WEB = Platform.OS === 'web';
 const EASE_OUT_CSS = 'cubic-bezier(0.23, 1, 0.32, 1)';
 const LAND_MS = 240;
@@ -372,21 +378,91 @@ export default function MenuScreen() {
   // —presente antes de que empiece el toque— sí puede cancelar el scroll, y
   // solo lo hace mientras hay un plato levantado. Además, en Android mantener
   // pulsado abre el menú contextual del navegador: se anula en la rejilla.
+  //
+  // Arrastre táctil en web: gestor directo sobre los eventos táctiles del
+  // navegador, sin pasar por Pressable (pulsación larga) + PanResponder. Ese
+  // relevo exigía mover el dedo para que el plato "se cogiera" y añadía cortes.
+  // Aquí: mantener pulsado TOUCH_LIFT_MS levanta el plato al momento bajo el
+  // dedo; desde ahí sigue al dedo fotograma a fotograma. Si el dedo se mueve
+  // antes, es un scroll y no se toca nada. Ratón y nativo siguen con el
+  // PanResponder de MealCell.
   const gridRef = useRef<View>(null);
+  const planRef = useRef(plan);
+  planRef.current = plan;
   useEffect(() => {
-    if (!IS_WEB) return;
+    if (!TOUCH_WEB) return;
     const el = gridRef.current as unknown as HTMLElement | null;
     if (!el?.addEventListener) return;
-    const onTouchMove = (e: TouchEvent) => {
-      if ((armedRef.current || dragRef.current) && e.cancelable) e.preventDefault();
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending: { slot: string; id: number; x0: number; y0: number; x: number; y: number } | null = null;
+    let lifted = false;
+
+    const gest = (p: NonNullable<typeof pending>) =>
+      ({ x0: p.x0, y0: p.y0, moveX: p.x, moveY: p.y, dx: p.x - p.x0, dy: p.y - p.y0 } as any);
+    const touchOf = (e: TouchEvent) =>
+      pending ? Array.from(e.changedTouches).find(t => t.identifier === pending!.id) : undefined;
+    const reset = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      pending = null; lifted = false;
     };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 1) { if (!lifted) reset(); return; }  // pinza/zoom
+      const cellEl = (e.target as HTMLElement).closest?.('[data-slot]') as HTMLElement | null;
+      const slot = cellEl?.dataset.slot;
+      if (!slot || !planRef.current[slot] || settlingRef.current || dragRef.current) return;
+      const t = e.changedTouches[0];
+      pending = { slot, id: t.identifier, x0: t.pageX, y0: t.pageY, x: t.pageX, y: t.pageY };
+      timer = setTimeout(() => {
+        timer = null;
+        if (!pending) return;
+        lifted = true;
+        dragApiRef.current.onStart(pending.slot, gest(pending));
+        (navigator as any).vibrate?.(10);
+      }, TOUCH_LIFT_MS);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const t = touchOf(e);
+      if (!t || !pending) return;
+      pending.x = t.pageX; pending.y = t.pageY;
+      if (!lifted) {
+        // Se mueve antes de levantar → es un scroll: soltamos el gesto.
+        if (Math.hypot(pending.x - pending.x0, pending.y - pending.y0) > TOUCH_SLOP) reset();
+        return;
+      }
+      if (e.cancelable) e.preventDefault();       // el plato manda, la página no se mueve
+      dragApiRef.current.onMove(gest(pending));
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const t = touchOf(e);
+      if (!t || !pending) return;
+      if (lifted) {
+        pending.x = t.pageX; pending.y = t.pageY;
+        dragApiRef.current.onEnd(gest(pending));
+        if (e.cancelable) e.preventDefault();     // sin "click" fantasma al soltar
+      }
+      reset();
+    };
+
     const onContextMenu = (e: Event) => e.preventDefault();
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: false });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: false });
     el.addEventListener('contextmenu', onContextMenu);
     return () => {
+      reset();
+      el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
       el.removeEventListener('contextmenu', onContextMenu);
     };
+    // Solo depende de `loaded`: re-engancharse en mitad de un gesto lo cortaría.
   }, [loaded]);
 
   const saveRecipe = async (data: Recipe) => {
@@ -713,12 +789,14 @@ const MealCell = memo(function MealCell({ slot, value, recipe, state, label, cel
   // táctil real, compite con el Pressable del botón por el mismo toque —
   // eso es lo que dejaba la pantalla sin responder al añadir un plato nuevo.
   return (
-    <View ref={cellRef} style={s.cellWrap} {...(filled ? pan.panHandlers : {})}>
+    // dataSet → data-slot: el gestor táctil de la rejilla (web) identifica la celda.
+    <View ref={cellRef} style={s.cellWrap} {...({ dataSet: { slot } } as any)} {...(filled && !TOUCH_WEB ? pan.panHandlers : {})}>
       <PressScale
         style={[s.cell, filled && s.cellDraggable, state !== 'source' && cellColors(recipe, event), stateStyle]}
         onPress={() => onPress(slot)}
-        onLongPress={() => drag.arm(slot)}
-        onPressOut={() => drag.disarm(slot)}
+        // En web táctil levanta el gestor de la rejilla; aquí solo ratón/nativo.
+        onLongPress={TOUCH_WEB ? undefined : () => drag.arm(slot)}
+        onPressOut={TOUCH_WEB ? undefined : () => drag.disarm(slot)}
         delayLongPress={LONG_PRESS_MS}
         scaleTo={0.96}
         accessibilityRole="button"
